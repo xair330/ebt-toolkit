@@ -34,10 +34,8 @@ python run.py
 | `图3_角色对比.png` | 教员/机长/副驾驶失误频次对比 |
 | `图4_气泡图.png` | 技术等级 × 胜任力 分布气泡图 |
 | `图5_机型雷达图.png` | A330 vs A350 雷达图 |
-| `图6_低分频次分布.png` | 各胜任力低分频次条形图 |
 | `不足项明细.csv` | 所有低分记录原始明细 |
 | `PRO专项分析.csv` | PRO胜任力子类分析 |
-| `评语质量排行.csv` | 教员/检查员评语质量得分排名 |
 | `分析总报告.md` | Markdown 格式汇总报告 |
 
 ---
@@ -45,11 +43,14 @@ python run.py
 ## 文件结构
 ```
 ebt_analysis_toolkit/
-├── config.py        ← 【唯一需要修改的文件】
-├── run.py           ← 主入口，直接运行
-├── data_loader.py   ← 数据加载与预处理
-├── charts.py        ← 所有图表生成函数
-└── README.md        ← 本说明文件
+├── config.py                ← 【唯一需要修改的文件】
+├── config_mgr.py            ← 配置加载器（读取 ebt_config.json）
+├── run.py                   ← 主入口，直接运行
+├── data_loader.py           ← 数据加载与预处理
+├── charts.py                ← 所有图表生成函数
+├── theme_matrix_analysis.py ← 主题矩阵深度分析模块
+├── pdf2ppt.py               ← PDF转PPT工具
+└── README.md                ← 本说明文件
 ```
 
 ## Excel 列结构说明
