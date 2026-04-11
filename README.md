@@ -20,7 +20,7 @@ pip install pandas openpyxl xlrd matplotlib seaborn jieba
 
 ### 3. 运行
 ```bash
-cd c:\工作文件\数据管理\检查员\ebt_analysis_toolkit
+# 进入项目目录后运行
 python run.py
 ```
 
