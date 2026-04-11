@@ -1,0 +1,34 @@
+# Python 编译产物
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# PyInstaller 打包产物
+build/
+dist/
+*.spec
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 数据文件（原始数据不上传）
+*.xls
+*.xlsx
+*.csv
+
+# 配置文件（含本地路径，不上传）
+ebt_config.json
+ui_settings.json
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
