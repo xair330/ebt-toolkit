@@ -112,10 +112,10 @@ def main():
 
     # 全员有评语记录
     all_desc  = extract_all_with_desc(df)
-    # 低分（<阈值）且有评语记录——参考cargo 4分制：阈值<4.0等于「有改进空间」
-    weak_threshold = cfg.get("WEAK_THRESHOLD", 4.0)
+    # 低分（<3分）且有评语记录——与A330/A350保持一致
+    weak_threshold = cfg.get("WEAK_THRESHOLD", 3.0)
     weak_desc = all_desc[all_desc["得分"] < weak_threshold].copy()
-    print(f"       有评语记录: {len(all_desc)} 条  |  小于{weak_threshold}分: {len(weak_desc)} 条")
+    print(f"       有评语记录: {len(all_desc)} 条  |  低分(<{weak_threshold}分): {len(weak_desc)} 条")
 
     # 训练主题匹配
     df_themed_all  = build_themed_df(all_desc)
@@ -135,12 +135,12 @@ def main():
     if not df_themed_weak.empty:
         plot_heatmap(
             df_themed_weak,
-            title    = f"胜任力 × 训练主题  热力矩阵  ·  待提升人员（< {weak_threshold}分）",
-            subtitle = f"{PERIOD} B777货机 | 得分小于{weak_threshold}分的记录按评语关键词归类",
+            title    = "胜任力 × 训练主题  热力矩阵  ·  低分预警（< 3分）",
+            subtitle = f"{PERIOD} B777货机 | 得分低于3分的记录按评语关键词归类",
             out_path = os.path.join(OUTPUT_DIR, "图A_低分人员_训练主题矩阵.png"),
         )
     else:
-        print("  [跳过] 小于阈値记录为空")
+        print("  [跳过] 低分记录为空")
 
     # ── 图B：胜任力 × 训练主题  ·  全员 ──────────────────────────
     print("[图B] 胜任力 × 训练主题  热力矩阵  · 全员...")
@@ -174,12 +174,12 @@ def main():
     if not df_themed_weak.empty:
         plot_risk_heatmap(
             df_themed_weak,
-            title    = f"胜任力 × 核心风险  热力矩阵  ·  待提升人员（< {weak_threshold}分）",
-            subtitle = f"{PERIOD} B777货机 | 小于{weak_threshold}分的记录",
+            title    = "胜任力 × 核心风险  热力矩阵  ·  低分预警（< 3分）",
+            subtitle = f"{PERIOD} B777货机 | 仅统计得分低于3分的记录",
             out_path = os.path.join(OUTPUT_DIR, "图E_低分_胜任力×核心风险矩阵.png"),
         )
     else:
-        print("  [跳过] 小于阈値记录为空")
+        print("  [跳过] 低分记录为空")
 
     # ── 生成完整分析报告 ──────────────────────────────────────────
     print("[报告] 生成分析报告...")
@@ -204,9 +204,276 @@ def main():
 def generate_report(df, all_desc, weak_desc,
                     df_themed_all, df_themed_weak,
                     period, output_dir):
-    from theme_matrix_analysis import RISK_NAMES, expand_to_risk, CODE_TO_NAME
+    from theme_matrix_analysis import RISK_NAMES, expand_to_risk
 
     total      = len(df)
+    n_all_desc = len(all_desc)
+    n_weak     = len(weak_desc)
+    code_cn    = {code: name for name, code in cfg["COMPETENCIES"]}
+    comp_order = [c for _, c in cfg["COMPETENCIES"]]
+
+    # ── 基础统计 ─────────────────────────────────────────────────
+    # 胜任力：全体命中 vs 低分命中
+    comp_all  = df_themed_all["胜任力"].value_counts()
+    comp_weak = df_themed_weak["胜任力"].value_counts() if not df_themed_weak.empty else pd.Series(dtype=int)
+
+    # 训练主题：全体 vs 低分
+    theme_all  = df_themed_all["训练主题"].value_counts()
+    theme_weak = df_themed_weak["训练主题"].value_counts() if not df_themed_weak.empty else pd.Series(dtype=int)
+
+    n_all_hit  = len(df_themed_all)
+    n_weak_hit = len(df_themed_weak)
+
+    # 核心风险
+    df_risk_all  = expand_to_risk(df_themed_all)
+    df_risk_weak = expand_to_risk(df_themed_weak) if not df_themed_weak.empty else pd.DataFrame()
+    risk_all  = df_risk_all["核心风险"].value_counts()  if not df_risk_all.empty  else pd.Series(dtype=int)
+    risk_weak = df_risk_weak["核心风险"].value_counts() if not df_risk_weak.empty else pd.Series(dtype=int)
+
+    # ── 热点格（胜任力 × 训练主题 交叉次数）────────────────────────
+    cross_all  = pd.crosstab(df_themed_all["胜任力"],  df_themed_all["训练主题"])
+    cross_weak = pd.crosstab(df_themed_weak["胜任力"], df_themed_weak["训练主题"]) \
+                 if not df_themed_weak.empty else pd.DataFrame()
+
+    # 全体 TOP10 热点格
+    all_hotspot = (cross_all.stack()
+                   .reset_index()
+                   .rename(columns={"胜任力": "code", "训练主题": "theme", 0: "cnt"})
+                   .sort_values("cnt", ascending=False)
+                   .head(10))
+
+    # 低分 TOP10 高危格
+    weak_hotspot = (cross_weak.stack()
+                    .reset_index()
+                    .rename(columns={"胜任力": "code", "训练主题": "theme", 0: "cnt"})
+                    .sort_values("cnt", ascending=False)
+                    .head(10)) if not cross_weak.empty else pd.DataFrame()
+
+    # ── 薄弱场景低分率（至少出现过2次全体命中的主题）──────────────
+    theme_rate = []
+    for t in theme_all.index:
+        a = int(theme_all.get(t, 0))
+        w = int(theme_weak.get(t, 0)) if t in theme_weak else 0
+        if a >= 2:
+            theme_rate.append((t, a, w, w / a * 100))
+    theme_rate.sort(key=lambda x: -x[3])
+
+    # ── 低分率 TOP3 场景（用于训练建议自动生成）────────────────────
+    top_rate     = [x for x in theme_rate if x[2] > 0][:3]
+    top_weak_hot = weak_hotspot.head(3).to_dict("records") if not weak_hotspot.empty else []
+
+    def _rate_str(a, w):
+        return f"{w/a*100:.1f}%" if a > 0 else "—"
+
+    def _comp_rows():
+        lines = []
+        for code in comp_order:
+            cn  = code_cn.get(code, code)
+            a   = int(comp_all.get(code, 0))
+            w   = int(comp_weak.get(code, 0)) if code in comp_weak else 0
+            r   = _rate_str(a, w) if a > 0 else "—"
+            bold_a = f"**{a}**" if a == int(comp_all.max()) else str(a)
+            bold_w = f"**{w}**" if w > 0 and w == int(comp_weak.max()) else str(w)
+            lines.append(f"| **{code}** {cn} | {bold_a} | {bold_w} | {r} |")
+        return "\n".join(lines)
+
+    def _theme_top10():
+        lines = []
+        for i, (t, cnt) in enumerate(theme_all.head(10).items(), 1):
+            w = int(theme_weak.get(t, 0)) if t in theme_weak else 0
+            r = _rate_str(cnt, w)
+            w_str = str(w) if w > 0 else "—"
+            lines.append(f"| {i} | {t} | {cnt} | {w_str} | {r} |")
+        return "\n".join(lines)
+
+    def _all_hotspot_rows():
+        lines = []
+        for _, row in all_hotspot.iterrows():
+            cn = code_cn.get(row["code"], row["code"])
+            lines.append(f"| **{row['code']}** | {row['theme']} | **{int(row['cnt'])}** | — |")
+        return "\n".join(lines)
+
+    def _weak_hotspot_rows():
+        if weak_hotspot.empty:
+            return "| — | — | — |"
+        lines = []
+        for _, row in weak_hotspot.iterrows():
+            lines.append(f"| **{row['code']}** | {row['theme']} | **{int(row['cnt'])}** |")
+        return "\n".join(lines)
+
+    def _rate_rank_rows():
+        lines = []
+        for i, (t, a, w, r) in enumerate(theme_rate[:12], 1):
+            warn = " ⚠️" if r >= 15 else ""
+            lines.append(f"| {i} | **{t}**{warn} | {r:.1f}% |")
+        return "\n".join(lines)
+
+    def _risk_rows(risk_ser):
+        if risk_ser.empty:
+            return "| — | — | — |"
+        total_r = risk_ser.sum()
+        lines = []
+        for code, cnt in risk_ser.items():
+            cn = RISK_NAMES.get(code, code)
+            lines.append(f"| **{code}**（{cn}） | {cnt} | {cnt/total_r*100:.1f}% |")
+        return "\n".join(lines)
+
+    # ── 报告正文 ──────────────────────────────────────────────────
+    report = f"""# {period} B777货机 EBT 胜任力训练分析报告
+
+> **数据来源**：cargo1-3.xlsx | {period} B777货机 EBT训练记录
+>
+> **分析方法**：基于评语关键词归类，无匹配项不统计
+>
+> **数据记录**：{n_all_hit} 条全体命中 | **低分（< 3分）命中记录**：{n_weak_hit} 条
+>
+> 生成时间：{pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")}
+
+---
+
+## 一、总体态势
+
+### 1.1 胜任力负担分布（全体 vs 低分）
+
+| 胜任力 | 全体命中 | 低分命中 | 低分占比 |
+| --- | --- | --- | --- |
+{_comp_rows()}
+
+> **关键发现**：命中次数最多的两个胜任力为
+> **{comp_order[comp_all.reindex(comp_order, fill_value=0).values.argmax()]}（{code_cn.get(comp_order[comp_all.reindex(comp_order, fill_value=0).values.argmax()],'—')}）**
+> 和 **{comp_weak.index[0]}（{code_cn.get(comp_weak.index[0],'—')}）**（低分绝对值最高）。
+
+---
+
+## 二、高频训练场景分析（全体人员）
+
+### 2.1 出现频次 TOP 10 训练主题
+
+| 排名 | 训练主题 | 全体次数 | 低分次数 | 低分率 |
+| --- | --- | --- | --- | --- |
+{_theme_top10()}
+
+> 低分率 = 低分（< 3分）次数 / 全体次数，反映该场景转化为真实能力瓶颈的概率。
+
+---
+
+## 三、高风险交叉点（热力矩阵解读）
+
+### 3.1 全体 TOP 10 热点格
+
+| 胜任力 | 训练主题 | 次数 | 解读 |
+| --- | --- | --- | --- |
+{_all_hotspot_rows()}
+
+> 图B（全体训练主题矩阵）可视化上述热点分布。
+
+![图B](图B_训练主题矩阵.png)
+
+### 3.2 低分 TOP 10 高危格（最需强化训练的交叉区域）
+
+| 胜任力 | 训练主题 | 低分次数 |
+| --- | --- | --- |
+{_weak_hotspot_rows()}
+
+> 图A（低分预警矩阵）聚焦于得分低于3分的记录，揭示真实能力缺口所在。
+
+![图A](图A_低分人员_训练主题矩阵.png)
+
+---
+
+## 四、薄弱场景低分率排名（高风险场景）
+
+> 低分率 = 低分（< 3分）次数 / 全体次数，反映该场景转化为真实能力瓶颈的概率
+
+| 排名 | 训练主题 | 低分率 |
+| --- | --- | --- |
+{_rate_rank_rows()}
+
+---
+
+## 五、核心风险分析
+
+### 5.1 全体核心风险命中分布
+
+| 核心风险 | 命中次数 | 占比 |
+| --- | --- | --- |
+{_risk_rows(risk_all)}
+
+### 5.2 低分核心风险命中分布
+
+| 核心风险 | 命中次数 | 占比 |
+| --- | --- | --- |
+{_risk_rows(risk_weak)}
+
+> **{risk_all.index[0] if len(risk_all) > 0 else '—'}（{RISK_NAMES.get(risk_all.index[0],'—') if len(risk_all) > 0 else '—'}）**
+> 是全员命中最多的核心风险，全员命中 **{int(risk_all.iloc[0]) if len(risk_all) > 0 else 0}次**。
+>
+> 低分矩阵中 **{f"{weak_hotspot.iloc[0]['code']}×{weak_hotspot.iloc[0]['theme']}={int(weak_hotspot.iloc[0]['cnt'])}" if not weak_hotspot.empty else '—'}** 最高，说明低分人员在该场景的能力缺口最为突出。
+
+![图C](图C_全员_桑基图.png)
+
+![图D](图D_全员_胜任力×核心风险矩阵.png)
+
+![图E](图E_低分_胜任力×核心风险矩阵.png)
+
+---
+
+## 六、训练改进建议
+
+### 🔴 第一优先级：立即强化（低分次数最多）
+
+{"".join([f'''
+### {i+1}. {r["code"]} × {r["theme"]}（低分{int(r["cnt"])}次）
+
+- **问题**：该交叉维度低分次数居前，是最需深度干预的能力薄弱点
+- **改进**：针对 {r["theme"]} 场景强化 {code_cn.get(r["code"],r["code"])} 维度专项训练
+''' for i, r in enumerate(top_weak_hot)])}
+
+---
+
+### 🟡 第二优先级：重点关注（低分率高）
+
+{"".join([f'''
+### {i+1+len(top_weak_hot)}. {t}（低分率 {r:.1f}%）
+
+- **改进**：该场景虽频次有限，但低分转化率高，建议在定期 EBT 训练中增设专项考核节点
+''' for i, (t, a, w, r) in enumerate(top_rate)])}
+
+---
+
+## 七、总结
+
+| 类型 | 核心问题 |
+| --- | --- |
+| **第一胜任力** | {comp_weak.index[0] if len(comp_weak) > 0 else '—'}（{code_cn.get(comp_weak.index[0],'—') if len(comp_weak) > 0 else '—'}）—低分绝对值最高 |
+| **第一训练场景** | {theme_weak.index[0] if len(theme_weak) > 0 else '—'}（低分{int(theme_weak.iloc[0]) if len(theme_weak) > 0 else 0}次） |
+| **最需关注的交叉点** | {f"{top_weak_hot[0]['code']}×{top_weak_hot[0]['theme']}" if top_weak_hot else '—'} |
+| **隐性高风险** | {top_rate[0][0] if top_rate else '—'}（低分率{f"{top_rate[0][3]:.1f}%" if top_rate else '—'}，易被忽视） |
+
+> 建议将上述分析结论纳入本季度训练讲评会核心议题，并在下一季度 EBT
+> 科目编排中对第一、二优先级专项进行强化覆盖，季度末再次对比矩阵变化趋势。
+
+---
+
+*本报告由 AeroEBT Toolkit 自动生成 · {period}*
+"""
+
+    report_path = os.path.join(output_dir, f"分析报告_{period.replace(' ', '_')}.md")
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(report)
+    print(f"  [OK] 已生成: {report_path}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        print(f"\n[严重错误] {e}")
+        traceback.print_exc()
+        pause_and_exit()
+
+
     n_all_desc = len(all_desc)
     n_weak     = len(weak_desc)
 
