@@ -10,7 +10,7 @@ import re
 from config_mgr import cfg
 from data_loader import load_and_clean, extract_weak_records, classify_issues, assess_comment_quality
 from charts import (plot_category_overview, plot_heatmap, plot_role_comparison,
-                    plot_level_bubble, plot_aircraft_radar, plot_score_distribution)
+                    plot_level_bubble, plot_aircraft_radar)
 
 def pause_and_exit():
     input("\n分析完成，按回车键退出...")
