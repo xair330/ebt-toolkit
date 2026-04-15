@@ -16,23 +16,33 @@ def load_and_clean(data_file: str) -> pd.DataFrame:
     df = pd.read_excel(data_file)
     new_cols = list(df.columns)
 
-    base_idx = 19   # 胜任力列块起始索引（如有变化请调整此值）
+    base_idx      = cfg.get("BASE_IDX", 19)        # 胜任力列块起始索引
+    cols_per_comp = cfg.get("COLS_PER_COMP", 3)    # 每个胜任力占几列（3=优点/得分/不足，1=仅得分）
+
+    idx = base_idx
     for ch_name, en_code in cfg["COMPETENCIES"]:
-        new_cols[base_idx]   = f"{en_code}_优点"
-        new_cols[base_idx+1] = f"{en_code}_得分"
-        new_cols[base_idx+2] = f"{en_code}_不足"
-        base_idx += 3
+        if cols_per_comp >= 3:
+            new_cols[idx]   = f"{en_code}_优点"
+            new_cols[idx+1] = f"{en_code}_得分"
+            new_cols[idx+2] = f"{en_code}_不足"
+        else:  # cols_per_comp == 1
+            new_cols[idx] = f"{en_code}_得分"
+        idx += cols_per_comp
 
     df.columns = new_cols
     first_code = cfg["COMPETENCIES"][0][1]
-    df = df[df[f"{first_code}_得分"] != "得分"].reset_index(drop=True)
+    df = df[pd.to_numeric(df[f"{first_code}_得分"], errors='coerce').notna()].reset_index(drop=True)
 
     for _, code in cfg["COMPETENCIES"]:
         df[f"{code}_得分"] = pd.to_numeric(df[f"{code}_得分"], errors="coerce")
 
-    df["机型"] = df["技术等级"].apply(
-        lambda x: "A330" if "330" in str(x) else ("A350" if "350" in str(x) else "其他")
-    )
+    def _get_aircraft(x):
+        s = str(x)
+        if "330" in s: return "A330"
+        if "350" in s: return "A350"
+        if "777" in s: return "B777"
+        return "其他"
+    df["机型"] = df["技术等级"].apply(_get_aircraft)
     df["角色"] = df["技术等级"].apply(_get_role)
     df["等级"] = df["技术等级"].apply(_get_level)
 
@@ -46,12 +56,17 @@ def extract_weak_records(df: pd.DataFrame, threshold: float = 3.0) -> pd.DataFra
     Returns:
         issues_df: 含列 技术等级/机型/角色/等级/胜任力/得分/问题描述
     """
+    cols_per_comp = cfg.get("COLS_PER_COMP", 3)
     rows = []
     for _, row in df.iterrows():
         for _, code in cfg["COMPETENCIES"]:
             score = row[f"{code}_得分"]
-            desc  = row[f"{code}_不足"]
-            if pd.notna(score) and score < threshold and pd.notna(desc) and str(desc).strip():
+            # 单列模式无不足文本，用空字符串占位
+            desc  = row.get(f"{code}_不足", "") if cols_per_comp >= 3 else ""
+            if pd.notna(score) and score < threshold:
+                # 三列模式要求有不足描述；单列模式只要低分即记录
+                if cols_per_comp >= 3 and (pd.isna(desc) or not str(desc).strip()):
+                    continue
                 rows.append({
                     "技术等级": str(row["技术等级"]),
                     "机型":    row["机型"],
@@ -59,7 +74,7 @@ def extract_weak_records(df: pd.DataFrame, threshold: float = 3.0) -> pd.DataFra
                     "等级":    row["等级"],
                     "胜任力":  code,
                     "得分":    score,
-                    "问题描述": str(desc).replace("\n", " "),
+                    "问题描述": str(desc).replace("\n", " ") if desc else f"{code}得分偏低",
                 })
     return pd.DataFrame(rows)
 
