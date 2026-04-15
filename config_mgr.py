@@ -64,7 +64,8 @@ cfg = {}
 
 def load_or_create_config():
     global cfg
-    config_path = os.path.join(get_exe_dir(), "ebt_config.json")
+    default_path = os.path.join(get_exe_dir(), "ebt_config.json")
+    config_path  = os.environ.get("EBT_CONFIG", default_path)
     if not os.path.exists(config_path):
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(DEFAULT_CONFIG, f, ensure_ascii=False, indent=4)

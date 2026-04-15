@@ -13,8 +13,9 @@ def load_and_clean(data_file: str) -> pd.DataFrame:
     Returns:
         df: 已清洗的 DataFrame，胜任力列格式为 {CODE}_优点 / {CODE}_得分 / {CODE}_不足
     """
-    df = pd.read_excel(data_file)
-    new_cols = list(df.columns)
+    df_raw = pd.read_excel(data_file)
+    raw_cols = list(df_raw.columns)          # 保留原始列名用于后续评语检测
+    new_cols = list(raw_cols)
 
     base_idx      = cfg.get("BASE_IDX", 19)        # 胜任力列块起始索引
     cols_per_comp = cfg.get("COLS_PER_COMP", 3)    # 每个胜任力占几列（3=优点/得分/不足，1=仅得分）
@@ -29,12 +30,17 @@ def load_and_clean(data_file: str) -> pd.DataFrame:
             new_cols[idx] = f"{en_code}_得分"
         idx += cols_per_comp
 
-    df.columns = new_cols
+    df_raw.columns = new_cols
+    df = df_raw
     first_code = cfg["COMPETENCIES"][0][1]
     df = df[pd.to_numeric(df[f"{first_code}_得分"], errors='coerce').notna()].reset_index(drop=True)
 
     for _, code in cfg["COMPETENCIES"]:
         df[f"{code}_得分"] = pd.to_numeric(df[f"{code}_得分"], errors="coerce")
+
+    # 单列模式：自动检测文字评语列，加入 {CODE}_优点 / {CODE}_不足
+    if cols_per_comp == 1:
+        df = _attach_text_desc(df, raw_cols, cfg["COMPETENCIES"])
 
     def _get_aircraft(x):
         s = str(x)
@@ -61,11 +67,12 @@ def extract_weak_records(df: pd.DataFrame, threshold: float = 3.0) -> pd.DataFra
     for _, row in df.iterrows():
         for _, code in cfg["COMPETENCIES"]:
             score = row[f"{code}_得分"]
-            # 单列模式无不足文本，用空字符串占位
-            desc  = row.get(f"{code}_不足", "") if cols_per_comp >= 3 else ""
+            desc  = row.get(f"{code}_不足", "")
+            if pd.isna(desc): desc = ""
+            desc = str(desc).strip()
             if pd.notna(score) and score < threshold:
                 # 三列模式要求有不足描述；单列模式只要低分即记录
-                if cols_per_comp >= 3 and (pd.isna(desc) or not str(desc).strip()):
+                if cols_per_comp >= 3 and not desc:
                     continue
                 rows.append({
                     "技术等级": str(row["技术等级"]),
@@ -74,7 +81,7 @@ def extract_weak_records(df: pd.DataFrame, threshold: float = 3.0) -> pd.DataFra
                     "等级":    row["等级"],
                     "胜任力":  code,
                     "得分":    score,
-                    "问题描述": str(desc).replace("\n", " ") if desc else f"{code}得分偏低",
+                    "问题描述": desc.replace("\n", " ") if desc else f"{code}得分偏低",
                 })
     return pd.DataFrame(rows)
 
@@ -124,6 +131,27 @@ def assess_comment_quality(text: str, cause_keys: list, sol_keys: list,
 
 
 # ── 内部工具 ─────────────────────────────────────────────────────
+def _attach_text_desc(df: pd.DataFrame, raw_cols: list, competencies: list) -> pd.DataFrame:
+    """
+    单列模式专用：扫描原始列名，找到每个胜任力对应的文字评语列（优点/不足），
+    附加到 DataFrame 中（列名：{CODE}_优点 / {CODE}_不足）。
+    规则：在索引>25的列中，找列名包含胜任力中文名的那一列，
+          该列=优点，紧随其后一列=不足。
+    """
+    attached = 0
+    for ch_name, en_code in competencies:
+        pos = None
+        for i, col in enumerate(raw_cols):
+            if i > 25 and ch_name in str(col):
+                pos = i
+                break
+        if pos is not None:
+            df[f"{en_code}_优点"] = df.iloc[:, pos].astype(str).replace("nan", "")
+            df[f"{en_code}_不足"] = df.iloc[:, pos + 1].astype(str).replace("nan", "")
+            attached += 1
+    return df
+
+
 def _get_role(g) -> str:
     g = str(g)
     if "机长" in g: return "机长"
