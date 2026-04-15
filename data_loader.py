@@ -109,7 +109,8 @@ def assess_comment_quality(text: str, cause_keys: list, sol_keys: list,
 
 
 # ── 内部工具 ─────────────────────────────────────────────────────
-def _get_role(g: str) -> str:
+def _get_role(g) -> str:
+    g = str(g)
     if "机长" in g: return "机长"
     if "教员" in g: return "教员"
     return "副驾驶"
