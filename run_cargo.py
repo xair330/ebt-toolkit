@@ -15,7 +15,7 @@ os.environ["EBT_CONFIG"] = os.path.join(_here, "cargo_config.json")
 # ────────────────────────────────────────────────────────────────────
 
 from config_mgr import cfg
-from data_loader import load_and_clean, extract_weak_records
+from data_loader import load_and_clean
 from theme_matrix_analysis import (
     THEME_KEYS, plot_heatmap, plot_theme_risk_heatmap
 )
@@ -26,14 +26,37 @@ def pause_and_exit():
     sys.exit(0)
 
 
-def build_themed_df(issues_df: pd.DataFrame) -> pd.DataFrame:
+def extract_all_with_desc(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    提取所有有不足文字评语的记录（不论得分高低）。
+    适用于单列模式——货机数据大量3分记录也有有价值的不足评语。
+    """
+    rows = []
+    for _, row in df.iterrows():
+        for _, code in cfg["COMPETENCIES"]:
+            desc = str(row.get(f"{code}_不足", "")).strip()
+            if not desc or desc in ("nan", "无", "-", ""):
+                continue
+            rows.append({
+                "技术等级": str(row["技术等级"]),
+                "机型":    row["机型"],
+                "角色":    row["角色"],
+                "等级":    row["等级"],
+                "胜任力":  code,
+                "得分":    row.get(f"{code}_得分"),
+                "问题描述": desc.replace("\n", " "),
+            })
+    return pd.DataFrame(rows)
+
+
+def build_themed_df(all_desc_df: pd.DataFrame) -> pd.DataFrame:
     """
     对低分项的问题描述进行训练主题关键词匹配，
     返回含 [胜任力, 训练主题, 得分, 角色, 机型, 等级] 列的长表。
     一条记录可命中多个训练主题（展开）。
     """
     rows = []
-    for _, row in issues_df.iterrows():
+    for _, row in all_desc_df.iterrows():
         desc = str(row.get("问题描述", ""))
         matched = [t for t, kws in THEME_KEYS.items()
                    if any(kw in desc for kw in kws)]
@@ -80,12 +103,12 @@ def main():
     # ── 数据加载 ──────────────────────────────────────────────────
     print("[1/3] 数据加载与清洗...")
     df = load_and_clean(DATA_FILE)
-    issues_df = extract_weak_records(df, threshold=3.0)
-    print(f"      共 {len(df)} 条记录，低分项 {len(issues_df)} 条")
+    all_desc_df = extract_all_with_desc(df)
+    print(f"      共 {len(df)} 条记录，有评语记录 {len(all_desc_df)} 条")
 
     # ── 匹配训练主题 ──────────────────────────────────────────────
     print("[2/3] 匹配训练主题关键词...")
-    df_themed = build_themed_df(issues_df)
+    df_themed = build_themed_df(all_desc_df)
     print(f"      命中训练主题记录: {len(df_themed)} 条")
 
     if df_themed.empty:
@@ -93,8 +116,8 @@ def main():
         pause_and_exit()
 
     # 保存明细 CSV
-    issues_df.to_csv(
-        os.path.join(OUTPUT_DIR, "不足项明细.csv"),
+    all_desc_df.to_csv(
+        os.path.join(OUTPUT_DIR, "评语明细.csv"),
         index=False, encoding="utf-8-sig"
     )
     df_themed.to_csv(
@@ -109,7 +132,7 @@ def main():
     plot_heatmap(
         df_themed,
         title    = f"胜任力 × 训练主题  热力矩阵  ·  B777货机",
-        subtitle = f"{PERIOD} | 低分项（< 3分）按评语关键词归类",
+        subtitle = f"{PERIOD} | 全量有评语记录按关键词归类",
         out_path = os.path.join(OUTPUT_DIR, "矩阵1_胜任力×训练主题.png"),
     )
 
