@@ -112,9 +112,10 @@ def main():
 
     # 全员有评语记录
     all_desc  = extract_all_with_desc(df)
-    # 低分（<3分）且有评语记录
-    weak_desc = all_desc[all_desc["得分"] < 3.0].copy()
-    print(f"       有评语记录: {len(all_desc)} 条  |  低分(<3分): {len(weak_desc)} 条")
+    # 低分（<阈值）且有评语记录——参考cargo 4分制：阈值<4.0等于「有改进空间」
+    weak_threshold = cfg.get("WEAK_THRESHOLD", 4.0)
+    weak_desc = all_desc[all_desc["得分"] < weak_threshold].copy()
+    print(f"       有评语记录: {len(all_desc)} 条  |  小于{weak_threshold}分: {len(weak_desc)} 条")
 
     # 训练主题匹配
     df_themed_all  = build_themed_df(all_desc)
@@ -129,17 +130,17 @@ def main():
     all_desc.to_csv(os.path.join(OUTPUT_DIR, "评语明细_全员.csv"), index=False, encoding="utf-8-sig")
     weak_desc.to_csv(os.path.join(OUTPUT_DIR, "评语明细_低分.csv"), index=False, encoding="utf-8-sig")
 
-    # ── 图A：胜任力 × 训练主题  ·  低分 ──────────────────────────
-    print("[图A] 胜任力 × 训练主题  热力矩阵  · 低分(<3分)...")
+    # ── 图A：胜任力 × 训练主题  ·  小于阈値（小于weak_threshold） ──────────
+    print(f"[图A] 胜任力 × 训练主题  热力矩阵  · < {weak_threshold}分人员...")
     if not df_themed_weak.empty:
         plot_heatmap(
             df_themed_weak,
-            title    = "胜任力 × 训练主题  热力矩阵  ·  低分预警（< 3分）",
-            subtitle = f"{PERIOD} B777货机 | 得分低于3分的记录按评语关键词归类",
+            title    = f"胜任力 × 训练主题  热力矩阵  ·  待提升人员（< {weak_threshold}分）",
+            subtitle = f"{PERIOD} B777货机 | 得分小于{weak_threshold}分的记录按评语关键词归类",
             out_path = os.path.join(OUTPUT_DIR, "图A_低分人员_训练主题矩阵.png"),
         )
     else:
-        print("  [跳过] 低分记录为空")
+        print("  [跳过] 小于阈値记录为空")
 
     # ── 图B：胜任力 × 训练主题  ·  全员 ──────────────────────────
     print("[图B] 胜任力 × 训练主题  热力矩阵  · 全员...")
@@ -169,16 +170,16 @@ def main():
     )
 
     # ── 图E：胜任力 × 核心风险  热力矩阵  ·  低分 ────────────────
-    print("[图E] 胜任力 × 核心风险  热力矩阵  · 低分(<3分)...")
+    print(f"[图E] 胜任力 × 核心风险  热力矩阵  · < {weak_threshold}分...")
     if not df_themed_weak.empty:
         plot_risk_heatmap(
             df_themed_weak,
-            title    = "胜任力 × 核心风险  热力矩阵  ·  低分预警（< 3分）",
-            subtitle = f"{PERIOD} B777货机 | 仅统计得分低于3分的记录",
+            title    = f"胜任力 × 核心风险  热力矩阵  ·  待提升人员（< {weak_threshold}分）",
+            subtitle = f"{PERIOD} B777货机 | 小于{weak_threshold}分的记录",
             out_path = os.path.join(OUTPUT_DIR, "图E_低分_胜任力×核心风险矩阵.png"),
         )
     else:
-        print("  [跳过] 低分记录为空")
+        print("  [跳过] 小于阈値记录为空")
 
     # ── 生成完整分析报告 ──────────────────────────────────────────
     print("[报告] 生成分析报告...")
