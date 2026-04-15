@@ -1,8 +1,11 @@
 """
 B777 货机 EBT 分析入口
 产出：
-  1. 胜任力 × 训练主题  热力矩阵
-  2. 训练主题 × 核心风险 热力矩阵
+  图A  胜任力 × 训练主题  热力矩阵  · 低分(<3分)
+  图B  胜任力 × 训练主题  热力矩阵  · 全员
+  图C  训练主题 → 核心风险  桑基图   · 全员
+  图D  胜任力 × 核心风险  热力矩阵  · 全员
+  图E  胜任力 × 核心风险  热力矩阵  · 低分(<3分)
 使用独立 cargo_config.json，不影响 A330/A350 的 ebt_config.json
 """
 import os
@@ -17,7 +20,10 @@ os.environ["EBT_CONFIG"] = os.path.join(_here, "cargo_config.json")
 from config_mgr import cfg
 from data_loader import load_and_clean
 from theme_matrix_analysis import (
-    THEME_KEYS, plot_heatmap, plot_theme_risk_heatmap
+    THEME_KEYS,
+    plot_heatmap,
+    plot_risk_heatmap,
+    plot_sankey,
 )
 
 
@@ -51,8 +57,7 @@ def extract_all_with_desc(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_themed_df(all_desc_df: pd.DataFrame) -> pd.DataFrame:
     """
-    对低分项的问题描述进行训练主题关键词匹配，
-    返回含 [胜任力, 训练主题, 得分, 角色, 机型, 等级] 列的长表。
+    对评语记录进行训练主题关键词匹配，返回含 [胜任力, 训练主题, ...] 长表。
     一条记录可命中多个训练主题（展开）。
     """
     rows = []
@@ -93,61 +98,92 @@ def main():
 
     PERIOD = cfg.get("REPORT_PERIOD", "")
 
-    print("=" * 56)
+    print("=" * 58)
     print("      B777 货机 EBT 矩阵分析引擎")
-    print("=" * 56)
+    print("=" * 58)
     print(f"[*] 数据源: {DATA_FILE}")
     print(f"[*] 期次:   {PERIOD}")
     print(f"[*] 产出:   {OUTPUT_DIR}\n")
 
     # ── 数据加载 ──────────────────────────────────────────────────
-    print("[1/3] 数据加载与清洗...")
+    print("[准备] 数据加载与清洗...")
     df = load_and_clean(DATA_FILE)
-    all_desc_df = extract_all_with_desc(df)
-    print(f"      共 {len(df)} 条记录，有评语记录 {len(all_desc_df)} 条")
+    print(f"       共 {len(df)} 条记录")
 
-    # ── 匹配训练主题 ──────────────────────────────────────────────
-    print("[2/3] 匹配训练主题关键词...")
-    df_themed = build_themed_df(all_desc_df)
-    print(f"      命中训练主题记录: {len(df_themed)} 条")
+    # 全员有评语记录
+    all_desc  = extract_all_with_desc(df)
+    # 低分（<3分）且有评语记录
+    weak_desc = all_desc[all_desc["得分"] < 3.0].copy()
+    print(f"       有评语记录: {len(all_desc)} 条  |  低分(<3分): {len(weak_desc)} 条")
 
-    if df_themed.empty:
-        print("[警告] 无记录命中任何训练主题，请检查 THEME_KEYS 关键词配置。")
+    # 训练主题匹配
+    df_themed_all  = build_themed_df(all_desc)
+    df_themed_weak = build_themed_df(weak_desc)
+    print(f"       训练主题命中: 全员 {len(df_themed_all)} 条  |  低分 {len(df_themed_weak)} 条\n")
+
+    if df_themed_all.empty:
+        print("[警告] 全员无记录命中任何训练主题，请检查 THEME_KEYS 配置。")
         pause_and_exit()
 
     # 保存明细 CSV
-    all_desc_df.to_csv(
-        os.path.join(OUTPUT_DIR, "评语明细.csv"),
-        index=False, encoding="utf-8-sig"
-    )
-    df_themed.to_csv(
-        os.path.join(OUTPUT_DIR, "训练主题命中明细.csv"),
-        index=False, encoding="utf-8-sig"
-    )
+    all_desc.to_csv(os.path.join(OUTPUT_DIR, "评语明细_全员.csv"), index=False, encoding="utf-8-sig")
+    weak_desc.to_csv(os.path.join(OUTPUT_DIR, "评语明细_低分.csv"), index=False, encoding="utf-8-sig")
 
-    # ── 生成两个热力矩阵 ──────────────────────────────────────────
-    print("[3/3] 生成热力矩阵...")
+    # ── 图A：胜任力 × 训练主题  ·  低分 ──────────────────────────
+    print("[图A] 胜任力 × 训练主题  热力矩阵  · 低分(<3分)...")
+    if not df_themed_weak.empty:
+        plot_heatmap(
+            df_themed_weak,
+            title    = "胜任力 × 训练主题  热力矩阵  ·  低分预警（< 3分）",
+            subtitle = f"{PERIOD} B777货机 | 得分低于3分的记录按评语关键词归类",
+            out_path = os.path.join(OUTPUT_DIR, "图A_低分人员_训练主题矩阵.png"),
+        )
+    else:
+        print("  [跳过] 低分记录为空")
 
-    # 矩阵1：胜任力 × 训练主题
+    # ── 图B：胜任力 × 训练主题  ·  全员 ──────────────────────────
+    print("[图B] 胜任力 × 训练主题  热力矩阵  · 全员...")
     plot_heatmap(
-        df_themed,
-        title    = f"胜任力 × 训练主题  热力矩阵  ·  B777货机",
-        subtitle = f"{PERIOD} | 全量有评语记录按关键词归类",
-        out_path = os.path.join(OUTPUT_DIR, "矩阵1_胜任力×训练主题.png"),
+        df_themed_all,
+        title    = "胜任力 × 训练主题  热力矩阵  ·  全员",
+        subtitle = f"{PERIOD} B777货机 | 全量有评语记录按关键词归类",
+        out_path = os.path.join(OUTPUT_DIR, "图B_训练主题矩阵.png"),
     )
 
-    # 矩阵2：训练主题 × 核心风险
-    plot_theme_risk_heatmap(
-        df_themed,
-        title    = f"训练主题 × 核心风险  热力矩阵  ·  B777货机",
-        subtitle = f"{PERIOD} | 训练主题通过 RISK_MAP 映射至对应核心风险",
-        out_path = os.path.join(OUTPUT_DIR, "矩阵2_训练主题×核心风险.png"),
+    # ── 图C：训练主题 → 核心风险  桑基图  ·  全员 ─────────────────
+    print("[图C] 训练主题 → 核心风险  桑基图  · 全员...")
+    plot_sankey(
+        df_themed_all,
+        title    = "训练主题 → 核心风险  安全流向图  ·  全员",
+        subtitle = f"{PERIOD} B777货机 | 训练主题通过 RISK_MAP 映射至对应核心风险",
+        out_path = os.path.join(OUTPUT_DIR, "图C_全员_桑基图.png"),
     )
 
-    print("\n" + "=" * 56)
+    # ── 图D：胜任力 × 核心风险  热力矩阵  ·  全员 ────────────────
+    print("[图D] 胜任力 × 核心风险  热力矩阵  · 全员...")
+    plot_risk_heatmap(
+        df_themed_all,
+        title    = "胜任力 × 核心风险  热力矩阵  ·  全员",
+        subtitle = f"{PERIOD} B777货机 | 核心风险按胜任力维度聚合",
+        out_path = os.path.join(OUTPUT_DIR, "图D_全员_胜任力×核心风险矩阵.png"),
+    )
+
+    # ── 图E：胜任力 × 核心风险  热力矩阵  ·  低分 ────────────────
+    print("[图E] 胜任力 × 核心风险  热力矩阵  · 低分(<3分)...")
+    if not df_themed_weak.empty:
+        plot_risk_heatmap(
+            df_themed_weak,
+            title    = "胜任力 × 核心风险  热力矩阵  ·  低分预警（< 3分）",
+            subtitle = f"{PERIOD} B777货机 | 仅统计得分低于3分的记录",
+            out_path = os.path.join(OUTPUT_DIR, "图E_低分_胜任力×核心风险矩阵.png"),
+        )
+    else:
+        print("  [跳过] 低分记录为空")
+
+    print("\n" + "=" * 58)
     print("全部分析完成！产出已保存至：")
     print(f" -> {OUTPUT_DIR}")
-    print("=" * 56)
+    print("=" * 58)
     pause_and_exit()
 
 
