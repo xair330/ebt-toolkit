@@ -403,6 +403,125 @@ def _make_risk_cross(df: pd.DataFrame) -> pd.DataFrame:
     return cross.reindex(index=row_order, columns=col_order, fill_value=0)
 
 
+def plot_theme_risk_heatmap(df: pd.DataFrame, title: str, subtitle: str,
+                             out_path: str):
+    """
+    绘制 训练主题 × 核心风险 热力矩阵。
+    Y轴：训练主题（按THEME_ORDER排列）
+    X轴：核心风险大类（代码+中文名）
+    """
+    df_risk = expand_to_risk(df)
+    if df_risk.empty:
+        print(f"  [跳过] {title} — 无匹配数据")
+        return
+
+    cross = pd.crosstab(df_risk["训练主题"], df_risk["核心风险"])
+    row_order = [t for t in THEME_ORDER if t in cross.index]
+    col_order  = [r for r in RISK_ORDER if r in cross.columns]
+    if not row_order or not col_order:
+        print(f"  [跳过] {title} — 交叉表为空")
+        return
+    cross = cross.reindex(index=row_order, columns=col_order, fill_value=0)
+
+    n_rows, n_cols = cross.shape
+
+    BG_BODY  = "#0D1526"
+    BG_MAIN  = "#0A1020"
+    AX_LABEL = "#8AA8D8"
+    TITLE_C  = "#D4E8FF"
+    GRID_C   = "#1C2E50"
+    ZERO_C   = "#0F1D36"
+    CBAR_TXT = "#A0C0E8"
+
+    cdict_risk = {
+        "red":   [(0.0, 0.06, 0.06), (0.35, 0.20, 0.20), (0.7, 0.90, 0.90), (1.0, 0.95, 0.95)],
+        "green": [(0.0, 0.12, 0.12), (0.35, 0.55, 0.55), (0.7, 0.40, 0.40), (1.0, 0.12, 0.12)],
+        "blue":  [(0.0, 0.28, 0.28), (0.35, 0.70, 0.70), (0.7, 0.10, 0.10), (1.0, 0.08, 0.08)],
+    }
+    cmap_risk = LinearSegmentedColormap("aero_risk2", cdict_risk)
+
+    fig_w = max(14, n_cols * 1.8 + 5)
+    fig_h = max(10, n_rows * 0.72 + 4)
+
+    fig = plt.figure(figsize=(fig_w, fig_h), facecolor=BG_MAIN)
+    ax  = fig.add_subplot(111, facecolor=BG_BODY)
+
+    data   = cross.values.astype(float)
+    masked = np.ma.masked_where(data == 0, data)
+    vmax   = data.max() if data.max() > 0 else 1
+
+    im = ax.imshow(masked, aspect="auto", cmap=cmap_risk,
+                   vmin=0.5, vmax=vmax, interpolation="nearest")
+    zero_mat = np.ma.masked_where(data != 0, data)
+    ax.imshow(zero_mat, aspect="auto",
+              cmap=LinearSegmentedColormap.from_list("zero", [ZERO_C, ZERO_C]),
+              vmin=0, vmax=1, interpolation="nearest")
+
+    for x in np.arange(-0.5, n_cols, 1):
+        ax.axvline(x, color=GRID_C, linewidth=0.6)
+    for y in np.arange(-0.5, n_rows, 1):
+        ax.axhline(y, color=GRID_C, linewidth=0.6)
+
+    for r in range(n_rows):
+        for c in range(n_cols):
+            val = int(data[r, c])
+            if val == 0:
+                ax.text(c, r, "·", ha="center", va="center",
+                        color="#2A3D60", fontsize=18,
+                        fontproperties=fp("bold", 18))
+            else:
+                norm_val = val / vmax
+                txt_c = "#1A1F2E" if norm_val > 0.55 else "#D8EBFF"
+                ax.text(c, r, str(val), ha="center", va="center",
+                        color=txt_c, fontsize=16, fontweight="bold",
+                        fontproperties=fp("bold", 16))
+
+    # X轴：核心风险代码 + 中文名
+    x_labels = [f"{code}\n{RISK_NAMES.get(code, code)}" for code in cross.columns]
+    ax.set_xticks(range(n_cols))
+    ax.set_xticklabels(x_labels, rotation=0, ha="center",
+                       fontproperties=fp("bold", 15), color=AX_LABEL)
+    ax.set_yticks(range(n_rows))
+    ax.set_yticklabels(cross.index, rotation=0,
+                       fontproperties=fp("bold", 16), color="#C8DEFF")
+    ax.tick_params(axis="both", which="both", length=0, pad=8)
+
+    for spine in ax.spines.values():
+        spine.set_edgecolor(GRID_C)
+
+    ax.set_xlabel("核心风险大类 (Core Risk Category)",
+                  fontproperties=fp("bold", 18), color=AX_LABEL, labelpad=14)
+    ax.set_ylabel("训练主题 (EBT Training Theme)",
+                  fontproperties=fp("bold", 18), color=AX_LABEL, labelpad=14)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.02, pad=0.015, aspect=30)
+    cbar.ax.yaxis.label.set_color(CBAR_TXT)
+    cbar.ax.tick_params(colors=CBAR_TXT, length=3)
+    for label in cbar.ax.get_yticklabels():
+        label.set_fontproperties(fp("bold", 15))
+        label.set_color(CBAR_TXT)
+    cbar.outline.set_edgecolor(GRID_C)
+    cbar.set_label("出现次数", fontproperties=fp("bold", 16), color=CBAR_TXT)
+
+    total = int(data.sum())
+    fig.text(0.5, 0.97, title,
+             ha="center", va="top", fontproperties=fp("black", 34),
+             color=TITLE_C)
+    fig.text(0.5, 0.935, subtitle + f"   |   总命中次数：{total}",
+             ha="center", va="top", fontproperties=fp("bold", 17),
+             color="#6080A0")
+    fig.add_artist(plt.Line2D([0.06, 0.94], [0.928, 0.928],
+                              transform=fig.transFigure,
+                              color="#1A3060", linewidth=1.2))
+
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+    plt.savefig(out_path, dpi=180, bbox_inches="tight",
+                facecolor=BG_MAIN, edgecolor="none")
+    print(f"  [OK] 已生成: {out_path}")
+    plt.close()
+
+
+
 # ══════════════════════════════════════════════════════════════════
 # 胜任力 × 核心风险 热力矩阵图
 # ══════════════════════════════════════════════════════════════════
