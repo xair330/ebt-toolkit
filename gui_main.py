@@ -1,5 +1,5 @@
 """
-AeroEBT Analyzer v3.0 — Glass Cockpit Edition
+AeroEBT Analyzer v3.3 — Glass Cockpit Edition
 带完整设置面板：背景图、透明度、毛玻璃、字体、输出参数筛选
 """
 import os
@@ -22,6 +22,9 @@ from theme_matrix_analysis import (
     plot_heatmap as tma_plot_heatmap,
     plot_risk_heatmap, plot_sankey,
 )
+from ob_distribution_charts import plot_ob_bar_chart, plot_ob_theme_heatmap
+from fleet_report_generator import generate_fleet_report
+from generate_sankey3 import plot_sankey_3_stage
 
 # ══════════════════════════════════════════════════════════════════
 # 全局主题色
@@ -579,7 +582,7 @@ class App(ctk.CTk):
             row=2, column=0, columnspan=2, sticky="ew", padx=18, pady=(0, 6))
 
         sys.stdout = StdoutRedirector(self.console)
-        print("AEROEBT v3.0 ── 系统初始化完成，等待数据接入...\n")
+        print("AEROEBT v3.3 ── 系统初始化完成，等待数据接入...\n")
 
     # ── 背景图 ────────────────────────────────────────────────
     def _apply_background(self):
@@ -614,7 +617,7 @@ class App(ctk.CTk):
         inner.pack_propagate(False)
 
         ctk.CTkLabel(inner,
-                     text="✦  AEROEBT  COMPETENCY  ANALYSIS  ENGINE  v3.0",
+                     text="✦  AEROEBT  COMPETENCY  ANALYSIS  ENGINE  v3.3",
                      font=ctk.CTkFont(family="HarmonyOS Sans SC Black", size=22, weight="bold"),
                      text_color=C_HUD_GREEN).pack(side="left", padx=22, pady=16)
 
@@ -865,64 +868,12 @@ class App(ctk.CTk):
         df_raw = load_and_clean(DATA_FILE)
         df = self._apply_filters(df_raw)
         issues_df = extract_weak_records(df, threshold=3.0)
-        issues_df.to_csv(os.path.join(OUTPUT_DIR, "不足项明细.csv"),
-                         index=False, encoding="utf-8-sig")
         cat_df = classify_issues(issues_df, cfg["CATEGORY_KEYS"])
         cat_counts = cat_df["问题大类"].value_counts()
         comp_codes = [c for _, c in cfg["COMPETENCIES"]]
         print(f"      原始 {len(df_raw)} 条 → 筛选后 {len(df)} 条，"
               f"低分项 {len(issues_df)} 条\n")
 
-        if self._chart_on("图1_问题大类"):
-            print("[2/12] 渲染图1: 问题大类分布...")
-            plot_category_overview(cat_counts,
-                os.path.join(OUTPUT_DIR, "图1_问题大类分布.png"))
-
-        if self._chart_on("图2_热力矩阵"):
-            print("[3/12] 渲染图2: 胜任力×问题大类热力矩阵...")
-            cross = pd.crosstab(cat_df["胜任力"], cat_df["问题大类"])
-            plot_heatmap(cross, os.path.join(OUTPUT_DIR, "图2_热力矩阵.png"))
-
-        if self._chart_on("图3_角色对比"):
-            print("[4/12] 渲染图3: 角色对比...")
-            role_cross = pd.crosstab(cat_df["问题大类"], cat_df["角色"])
-            plot_role_comparison(role_cross,
-                os.path.join(OUTPUT_DIR, "图3_角色对比.png"))
-
-        if self._chart_on("图4_气泡图"):
-            print("[5/12] 渲染图4: 等级气泡图...")
-            level_order = ["学员", "A1", "A2", "B", "C", "D", "Z", "教员"]
-            bubble_data = cat_df.groupby(["等级", "胜任力"]).size().reset_index(name="count")
-            bubble_data["lx"] = bubble_data["等级"].apply(
-                lambda x: level_order.index(x) if x in level_order else -1)
-            bubble_data["cy"] = bubble_data["胜任力"].apply(
-                lambda x: comp_codes.index(x) if x in comp_codes else -1)
-            bubble_data = bubble_data[bubble_data["lx"] >= 0]
-            plot_level_bubble(bubble_data, level_order, comp_codes,
-                os.path.join(OUTPUT_DIR, "图4_气泡图.png"))
-
-        if self._chart_on("图5_机型雷达"):
-            print("[6/12] 渲染图5: 机型雷达图...")
-            radar_data = {}
-            for ac in ["A330", "A350"]:
-                sub = cat_df[cat_df["机型"] == ac]
-                counts = [sub[sub["胜任力"] == c].shape[0] for c in comp_codes]
-                total = sum(counts) or 1
-                radar_data[ac] = [x / total for x in counts]
-            plot_aircraft_radar(radar_data, comp_codes,
-                os.path.join(OUTPUT_DIR, "图5_机型雷达图.png"))
-
-        # PRO 专项（不受图表开关控制，始终输出CSV）
-        pro_df = issues_df[issues_df["胜任力"] == "PRO"].copy()
-        def classify_pro(text):
-            if any(kw in str(text) for kw in cfg["PRO_CALLOUT_KEYS"]): return "标准喊话"
-            if any(kw in str(text) for kw in cfg["PRO_CRITICAL_KEYS"]): return "关键程序"
-            return "一般性程序"
-        pro_df["PRO子类"] = pro_df["问题描述"].apply(classify_pro)
-        pro_summary = pro_df["PRO子类"].value_counts().reset_index()
-        pro_summary.columns = ["分类区段", "提及总频次"]
-        pro_summary.to_csv(os.path.join(OUTPUT_DIR, "PRO专项分析.csv"),
-                           index=False, encoding="utf-8-sig")
 
         # ── 阶段二：训练主题 ─────────────────────────────────
         print("\n" + "━" * 50)
@@ -956,149 +907,31 @@ class App(ctk.CTk):
         else:
             print("\n[7/12] 训练主题图表均已跳过（设置中未启用）")
 
-        print("\n[8/12] 渲染训练主题矩阵（图A-D）...")
-        if tma_all is not None and self._chart_on("图A_全员主题矩阵"):
-            tma_plot_heatmap(tma_all,
-                title="胜任力 × 训练主题  热力矩阵  ·  全体人员",
-                subtitle=f"{PERIOD} EBT检查数据 | 按评语关键词归类",
-                out_path=os.path.join(OUTPUT_DIR, "图A_全体人员_训练主题矩阵.png"))
 
-        if tma_weak is not None and self._chart_on("图B_低分主题矩阵"):
-            tma_plot_heatmap(tma_weak,
-                title="胜任力 × 训练主题  热力矩阵  ·  低分预警（< 3分）",
-                subtitle=f"{PERIOD} EBT检查数据 | 仅统计各胜任力得分低于3分的记录",
-                out_path=os.path.join(OUTPUT_DIR, "图B_低分人员_训练主题矩阵.png"))
-
-        if tma_a330 is not None and len(tma_a330) > 0 and self._chart_on("图C_A330主题矩阵"):
-            tma_plot_heatmap(tma_a330,
-                title="胜任力 × 训练主题  热力矩阵  ·  A330 机型",
-                subtitle=f"{PERIOD} A330检查数据",
-                out_path=os.path.join(OUTPUT_DIR, "图C_A330机型_训练主题矩阵.png"))
-
-        if tma_a350 is not None and len(tma_a350) > 0 and self._chart_on("图D_A350主题矩阵"):
-            tma_plot_heatmap(tma_a350,
-                title="胜任力 × 训练主题  热力矩阵  ·  A350 机型",
-                subtitle=f"{PERIOD} A350检查数据",
-                out_path=os.path.join(OUTPUT_DIR, "图D_A350机型_训练主题矩阵.png"))
-
-        # ── 阶段三：核心风险 ─────────────────────────────────
+        # ── 阶段三点五：OB 行为指标分析 ─────────────────────────────────
         print("\n" + "━" * 50)
-        print("  阶段三  核心风险关联分析")
+        print("  新增阶段  衍生 OB 行为短板与双机型深度报告")
         print("━" * 50)
 
-        print("\n[9/12] 渲染桑基图（图E-G）...")
-        if tma_all is not None and self._chart_on("图E_全员桑基图"):
-            plot_sankey(tma_all,
-                title="训练主题 → 核心风险  流向分析  ·  全体人员",
-                subtitle=f"{PERIOD} EBT检查数据 | 训练主题经映射关联至核心风险大类",
-                out_path=os.path.join(OUTPUT_DIR, "图E_全员_训练主题→核心风险_桑基图.png"))
+        print("\n[++] 渲染 OB 分布图与机型报告...")
+        try:
+            if tma_a330 is not None and not tma_a330.empty:
+                plot_ob_bar_chart(tma_a330, "A330 机型高频 OB 短板分布 (Top 20)", f"{PERIOD} A330 EBT 数据", os.path.join(OUTPUT_DIR, "图_A330_OB高频分布.png"))
+                plot_ob_theme_heatmap(tma_a330, "A330 行为指标(OB) × 训练主题", "底端行为探因", os.path.join(OUTPUT_DIR, "图_A330_OB_Theme矩阵.png"))
+                plot_sankey_3_stage(tma_a330, "A330 训练主题 → OB缺陷 → 核心风险 流向分析", f"{PERIOD} EBT三级架构映射", os.path.join(OUTPUT_DIR, "三级桑基图_A330.png"))
+                generate_fleet_report(tma_a330, "A330", OUTPUT_DIR)
+            
+            if tma_a350 is not None and not tma_a350.empty:
+                plot_ob_bar_chart(tma_a350, "A350 机型高频 OB 短板分布 (Top 20)", f"{PERIOD} A350 EBT 数据", os.path.join(OUTPUT_DIR, "图_A350_OB高频分布.png"))
+                plot_ob_theme_heatmap(tma_a350, "A350 行为指标(OB) × 训练主题", "底端行为探因", os.path.join(OUTPUT_DIR, "图_A350_OB_Theme矩阵.png"))
+                plot_sankey_3_stage(tma_a350, "A350 训练主题 → OB缺陷 → 核心风险 流向分析", f"{PERIOD} EBT三级架构映射", os.path.join(OUTPUT_DIR, "三级桑基图_A350.png"))
+                generate_fleet_report(tma_a350, "A350", OUTPUT_DIR)
+        except Exception as e:
+            print(f"      [警告] OB/Fleet 报告生成模块异常: {e}")
 
-        if tma_a330 is not None and len(tma_a330) > 0 and self._chart_on("图F_A330桑基图"):
-            plot_sankey(tma_a330,
-                title="训练主题 → 核心风险  流向分析  ·  A330 机型",
-                subtitle=f"{PERIOD} A330检查数据",
-                out_path=os.path.join(OUTPUT_DIR, "图F_A330_训练主题→核心风险_桑基图.png"))
+        print("\n[++] 全部报告自动化拼装结束！")
 
-        if tma_a350 is not None and len(tma_a350) > 0 and self._chart_on("图G_A350桑基图"):
-            plot_sankey(tma_a350,
-                title="训练主题 → 核心风险  流向分析  ·  A350 机型",
-                subtitle=f"{PERIOD} A350检查数据",
-                out_path=os.path.join(OUTPUT_DIR, "图G_A350_训练主题→核心风险_桑基图.png"))
-
-        print("\n[10/12] 渲染胜任力×核心风险矩阵（图H-K）...")
-        if tma_all is not None and self._chart_on("图H_全员风险矩阵"):
-            plot_risk_heatmap(tma_all,
-                title="胜任力 × 核心风险  热力矩阵  ·  全体人员",
-                subtitle=f"{PERIOD} EBT检查数据 | 训练主题关联映射至核心风险大类",
-                out_path=os.path.join(OUTPUT_DIR, "图H_全员_胜任力×核心风险矩阵.png"))
-
-        if tma_weak is not None and self._chart_on("图I_低分风险矩阵"):
-            plot_risk_heatmap(tma_weak,
-                title="胜任力 × 核心风险  热力矩阵  ·  低分预警（< 3分）",
-                subtitle=f"{PERIOD} EBT检查数据 | 仅统计得分低于3分的记录",
-                out_path=os.path.join(OUTPUT_DIR, "图I_低分_胜任力×核心风险矩阵.png"))
-
-        if tma_a330 is not None and len(tma_a330) > 0 and self._chart_on("图J_A330风险矩阵"):
-            plot_risk_heatmap(tma_a330,
-                title="胜任力 × 核心风险  热力矩阵  ·  A330 机型",
-                subtitle=f"{PERIOD} A330检查数据",
-                out_path=os.path.join(OUTPUT_DIR, "图J_A330_胜任力×核心风险矩阵.png"))
-
-        if tma_a350 is not None and len(tma_a350) > 0 and self._chart_on("图K_A350风险矩阵"):
-            plot_risk_heatmap(tma_a350,
-                title="胜任力 × 核心风险  热力矩阵  ·  A350 机型",
-                subtitle=f"{PERIOD} A350检查数据",
-                out_path=os.path.join(OUTPUT_DIR, "图K_A350_胜任力×核心风险矩阵.png"))
-
-        # ── 阶段四：报告 ─────────────────────────────────────
-        print("\n" + "━" * 50)
-        print("  阶段四  报告汇总")
-        print("━" * 50)
-
-        print("\n[11/12] 生成 Markdown 总报告...")
-        report_path = os.path.join(OUTPUT_DIR, "分析总报告.md")
-        filter_note = self._make_filter_preview().replace("\n", " | ")
-        report_content = f"""# {PERIOD} EBT胜任力深度分析报告
-
-> 筛选条件：{filter_note}
-> 原始数据：`{DATA_FILE}`
-> 详细数据见同目录 CSV 文件
-
----
-
-## 一、问题大类分布
-![图1](图1_问题大类分布.png)
-
-## 二、胜任力 × 问题大类 热力矩阵
-![图2](图2_热力矩阵.png)
-
-## 三、角色对比
-![图3](图3_角色对比.png)
-
-## 四、技术等级气泡图
-![图4](图4_气泡图.png)
-
-## 五、机型雷达图
-![图5](图5_机型雷达图.png)
-
----
-
-## 六、胜任力 × 训练主题 热力矩阵
-### 6.1 全体人员
-![图A](图A_全体人员_训练主题矩阵.png)
-### 6.2 低分预警
-![图B](图B_低分人员_训练主题矩阵.png)
-### 6.3 A330
-![图C](图C_A330机型_训练主题矩阵.png)
-### 6.4 A350
-![图D](图D_A350机型_训练主题矩阵.png)
-
----
-
-## 七、训练主题 → 核心风险 桑基图
-### 7.1 全员
-![图E](图E_全员_训练主题→核心风险_桑基图.png)
-### 7.2 A330
-![图F](图F_A330_训练主题→核心风险_桑基图.png)
-### 7.3 A350
-![图G](图G_A350_训练主题→核心风险_桑基图.png)
-
----
-
-## 八、胜任力 × 核心风险 热力矩阵
-### 8.1 全员
-![图H](图H_全员_胜任力×核心风险矩阵.png)
-### 8.2 低分
-![图I](图I_低分_胜任力×核心风险矩阵.png)
-### 8.3 A330
-![图J](图J_A330_胜任力×核心风险矩阵.png)
-### 8.4 A350
-![图K](图K_A350_胜任力×核心风险矩阵.png)
-"""
-        with open(report_path, "w", encoding="utf-8") as f:
-            f.write(report_content)
-
-        print("\n[12/12] 全部流程完毕！")
+        print("\n[13/13] 全部流程完毕！")
         print(f"\n[OK] 产出目录:\n{OUTPUT_DIR}")
 
 

@@ -1,0 +1,29 @@
+{
+  "bg_image_path": "C:/Users/xair3/Pictures/AirPics/07i06lZC498yVhWKT68B4FV-12.jpg",
+  "panel_alpha": 0.41,
+  "blur_radius": 7,
+  "font_family": "HarmonyOS Sans SC",
+  "font_size_base": 15,
+  "filter_jishu_dengji": [],
+  "filter_jixing": [],
+  "filter_yunyingjidi": [],
+  "filter_xunlian_leixing": [],
+  "output_charts": {
+    "图1_问题大类": true,
+    "图2_热力矩阵": true,
+    "图3_角色对比": true,
+    "图4_气泡图": true,
+    "图5_机型雷达": true,
+    "图A_全员主题矩阵": true,
+    "图B_低分主题矩阵": true,
+    "图C_A330主题矩阵": true,
+    "图D_A350主题矩阵": true,
+    "图E_全员桑基图": true,
+    "图F_A330桑基图": true,
+    "图G_A350桑基图": true,
+    "图H_全员风险矩阵": true,
+    "图I_低分风险矩阵": true,
+    "图J_A330风险矩阵": true,
+    "图K_A350风险矩阵": true
+  }
+}

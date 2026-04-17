@@ -190,6 +190,137 @@ RISK_ORDER = ["CFIT", "LOC", "MAC", "ARC", "RE", "RI", "GD",
               "KSF", "IFD", "HSE", "综合能力"]
 
 # ══════════════════════════════════════════════════════════════════
+# OB行为指标解析词库 (NLP 映射映射)
+# ══════════════════════════════════════════════════════════════════
+OB_KEYS = {
+    # ─── 包含四大核心非技术能力 (COM, PSD, LTW, WLM) 与关键技术能力 ───
+    "COM": {
+        "OB1_确定接收者已准备好并且能够接收信息": ["准备好", "接收者准备", "时机不对", "打断", "未注意状态"],
+        "OB2_恰当选择沟通的内容、时机、方式和对象": ["时机", "对象", "方式和对象", "找谁", "无效沟通", "选错", "不仅"],
+        "OB3_清晰、准确、简洁地传递信息": ["清晰", "准确", "简洁", "词不达意", "声音小", "音量小", "太小声", "冗长", "啰嗦", "重点"],
+        "OB4_确认接收者展示出对重要信息的理解": ["确认接收", "是否理解", "未核实理解"],
+        "OB5_接收信息时，积极倾听并展示理解": ["倾听", "展示理解", "不理解", "没听清", "听信", "接纳", "反馈"],
+        "OB6_询问相关且有效的问题": ["询问", "质疑", "问清", "有效的问题", "不懂就问", "不问"],
+        "OB7_适当升级沟通以解决已发现的偏差": ["升级沟通", "强硬", "干预无效时", "未大胆提出", "大胆交流", "再次提醒"],
+        "OB8_以适合社会文化的方式使用和解读非语言沟通": ["手势", "肢体", "表情", "情绪识别", "非语言"],
+        "OB9_遵守标准的无线电通话用语和程序": ["通话用语", "标准话", "陆空通话", "用语不标准", "ATC"],
+        "OB10_使用英文准确应对数据链信息": ["英文", "数据链", "CPDLC"]
+    },
+    "PSD": {
+        "OB1_及时识别、评估和管理威胁和差错": ["识别问题", "核心威胁", "问题的原因", "盲目", "未觉察", "未察觉", "发现不及时"],
+        "OB2_从适当的来源寻求准确和充分的信息": ["收集", "获取", "适当的来源", "寻求", "充分的信息", "渠道", "看错", "flysmart", "全面"],
+        "OB3_识别并核实出现的问题及原因": ["判断依据", "原因", "误判", "真因", "现象与本质"],
+        "OB4_在保证安全的前提下，坚持不懈地解决问题": ["坚持不懈", "放弃", "迎难而上", "缺乏韧劲", "未彻底解决"],
+        "OB5_确定并考虑适当的选项": ["选项", "备选", "单一", "方案", "计划单一", "兜底", "多重方案", "没有计划"],
+        "OB6_应用适当和及时的决策技巧": ["急于下结论", "着急决策", "仓促", "武断", "拍脑袋", "犹豫", "主观臆断", "果断"],
+        "OB7_根据需要监控、回顾以及调整决策": ["检查回顾", "调整策略", "持续关注", "验证", "修正", "未作回顾", "改变主意"],
+        "OB8_在缺乏指导或程序的情况下随机应变": ["随机应变", "死板", "灵活处理", "变通"],
+        "OB9_当遇到非预期事件时展现出复原力": ["复原力", "意外恢复", "突发应对"]
+    },
+    "LTW": {
+        "OB1_鼓励团队参与和开放坦诚交流": ["鼓励", "意见", "想法", "建议", "氛围", "包容", "坦诚交流"],
+        "OB2_需要时表现出主观能动性和提供指导": ["果断地领导", "主观能动性", "积极主动", "引导", "带头"],
+        "OB3_使他人参与计划": ["参与计划", "单打独斗", "未让PM参与", "拉入团队"],
+        "OB4_考虑他人的意见": ["倾听建议", "独断", "一意孤行", "参考意见", "采纳"],
+        "OB5_适宜地给予和接收反馈意见": ["接受意见", "反馈", "听不进", "给予反馈"],
+        "OB6_以有效的方式处理和解决冲突与分歧": ["冲突", "分歧", "调节矛盾", "各自为战"],
+        "OB7_在需要时果断地领导": ["决断力", "机长担当", "领导力不足", "软弱"],
+        "OB8_承担决策和行动的责任": ["承担", "推诿", "依赖", "缺乏担当", "推负责"],
+        "OB9_遵照执行指令": ["执行指令", "抗拒", "不听口令", "擅自行动"],
+        "OB10_应用有效的干预策略来解决已发现的偏差": ["偏差", "干预策略", "纠正", "兜底", "防患", "干预过晚"],
+        "OB11_管理文化和语言方面的挑战": ["语言障碍", "文化差异", "外籍"]
+    },
+    "WLM": {
+        "OB1_在各种情况下都有良好的自我管理（情绪、行为）": ["冷静", "慌乱", "急躁", "紧张", "情绪管理", "手忙脚乱"],
+        "OB2_对任务进行有效的规划、优先级分配及节点安排": ["优先级", "主次", "重要紧急", "排序", "本末倒置", "规划"],
+        "OB3_在执行任务时有效地管理时间": ["时间管理", "超时", "拖沓", "仓促执行"],
+        "OB4_提供和给予协助": ["协助", "帮助", "支持", "接手"],
+        "OB5_委派任务": ["委派", "分发", "一人包揽", "全干了"],
+        "OB6_适当时寻求并接受协助": ["寻求协助", "死扛", "不懂求助", "拒绝帮忙"],
+        "OB7_认真对动作进行监控、回顾和交叉检查": ["交叉检查", "漏看", "监控不到位", "监控负荷", "双重确认"],
+        "OB8_核实任务是否已达到预期结果": ["核实预期", "结果偏差", "未验证效果"],
+        "OB9_在干扰情形时能有效管理并恢复正常状态": ["分心", "干扰", "专注", "转移注意力", "抗干扰"]
+    },
+    "PRO": {
+        "OB1_确定在哪里可以找到程序和法规": ["手册出处", "乱翻", "找不到", "不知道在哪"],
+        "OB2_及时应用相关的运行规定、程序和技术": ["运行规定", "SOP", "偏离", "跳步", "漏做", "动作不规", "未能及时应用"],
+        "OB3_遵循 SOP，除非更高的安全性指示需要适当偏离": ["未遵守SOP", "自创动作", "标新立异", "抄捷径"],
+        "OB4_正确操作飞机系统和相关设备": ["面板", "输入错", "按错", "操作失误", "拨错", "CDU输入"],
+        "OB5_监控飞机系统状态": ["系统状态", "未发觉故障", " ECAM 告警", "参数异常", "漏看状态"],
+        "OB6_遵守适用法规": ["违反法规", "违法规限值", "突破红线"],
+        "OB7_应用相关的程序知识": ["程序理解错误", "死记硬背", "不知所以然"]
+    },
+    "FPM": {
+        "OB1_根据情况，以适宜的方式，精确、平稳地人工控制飞机": ["操纵量", "打杆", "蹬舵", "力矩", "带杆", "推杆", "平稳", "粗暴控制", "不精细"],
+        "OB2_监控并识别与预计飞行航径的偏差，并采取适当措施": ["飞行轨迹", "偏离航径", "高了", "低了", "高度保持", "未修偏"],
+        "OB3_使用关系式以及导航信号或目视信息来人工控制飞机": ["目视信息", "错看参考点", "错觉", "仪表交叉"],
+        "OB4_管理飞行航径以实现最佳运行表现": ["最佳表现", "航迹粗糙", "非经济速度"],
+        "OB5_在人工飞行期间保持预计航径，同时管理干扰": ["分心导致偏航", "注意力分配致偏"],
+        "OB6_恰当的使用引导系统以匹配当时的情况": ["未使用引导", "错误跟随指引", "硬跟FD"],
+        "OB7_有效监控飞行引导系统模式": ["未看FD模式", "无视指引工作"]
+    },
+    "FPA": {
+        "OB1_根据已有的引导系统，恰当的使用以匹配当时的情况": ["该拔不拔", "晚接通", "盲目相信自动飞行"],
+        "OB2_监控并识别与预计飞行航径的偏差，并采取适当措施": ["航迹偏离不知", "VDEV不看", "偏高不知道"],
+        "OB3_管理飞行航径以实现最佳运行表现": ["剖面管理差", "高距比错", "过早减速"],
+        "OB4_使用自动化功能保持预计飞行航径，同时管理其他任务和干扰": ["自动化负荷管理", "边按MCDU边偏离"],
+        "OB5_根据飞行阶段和工作负荷，及时选择适当的自动化级别和模式": ["自动化级别错", "不需要的时候盲用模式", "降级处理不当"],
+        "OB6_有效监控飞行引导系统，包括接通的状态和自动模式的转换": ["FMA", "模式", "降级", "未核实自动模式", "喊话错误", "接通状态"]
+    },
+    "SAW": {
+        "OB1_监控并评估飞机及系统的状态": ["飞机状态", "系统状态", "未发觉", "警告灯亮不知"],
+        "OB2_监控并评估飞机的能量状态及预计的飞行航径": ["能量状态", "高能量", "低能量", "减速慢", "偏高", "冲偏出倾向"],
+        "OB3_监控和评估可能影响运行的整体环境": ["整体环境", "雷达", "气象", "风切变", "地标", "能见度"],
+        "OB4_验证信息的准确性并检查过失误差": ["核对信息", "偏听偏信", "虚假高度"],
+        "OB5_保持对相关人员表现能力的意识": ["同伴状态不佳", "关注PM", "关注管制员情况"],
+        "OB6_制定有效的应对预案": ["应对预案", "没想后招", "未考虑特殊情况"],
+        "OB7_对情况意识下降的迹象做出回应": ["懵懂", "意识丧失", "迷失", "反应迟缓", "管状视野"]
+    },
+    "KNO": {
+        "OB1_展示有关限制和系统及相互作用的实用和适用知识": ["工作原理", "系统逻辑", "不知限值", "背不熟"],
+        "OB2_展示所需的已公布的运行规定的知识": ["法规不明", "手册限制不清楚", "运行规定"],
+        "OB3_展示有关物理学环境、空中交通环境的知识": ["高空物理", "颠簸层", "气流认识", "流量意识"],
+        "OB4_展示有关适用法规的适当知识": ["适用要求", "民航规章", " CCAR "],
+        "OB5_知道从哪里获得所需信息": ["瞎翻书", "不知道在哪看", "QRH找错"],
+        "OB6_表现出对获取知识的积极兴趣": ["学习态度", "敷衍", "未提前准备"],
+        "OB7_能够有效地应用知识": ["理论脱离实际", "书呆子", "刻板", "死搬硬套"]
+    }
+}
+
+import re
+
+def extract_obs_from_text(comment: str, comp_code: str) -> list:
+    """
+    核心OB提取算法：
+    1. 优先提取手动显式标记 (如 OB2、OB-3)。
+    2. 若没有，则走 NLP NLP_KEYS 字典进行倒装多模式匹配。
+    """
+    if not comment or comment in ("nan", "无", "-", ""):
+        return []
+        
+    explicit_obs_list = []
+    
+    # 规则 1：匹配显式标签 (如 OB1, OB-2, OB 8)
+    matches = re.findall(r'OB[-\s]?0?([1-9])', comment, re.IGNORECASE)
+    for m in matches:
+        explicit_obs_list.append(f"{comp_code}-OB{m}")
+        
+    # 如果找到了显式OB，优先使用教员打的标签（不再做多重猜测）
+    if explicit_obs_list:
+        return list(set(explicit_obs_list))
+        
+    # 规则 2：自然语义逆向匹配 (如果当前胜任力在词库中)
+    nlp_obs_list = []
+    if comp_code in OB_KEYS:
+        # 遍历该胜任力下的所有OB特征进行多重匹配
+        for ob_id, kws in OB_KEYS[comp_code].items():
+            if any(kw in comment for kw in kws):
+                # 提取数字，形如 "OB1"
+                nlp_obs_list.append(f"{comp_code}-{ob_id.split('_')[0]}")
+                
+    return list(set(nlp_obs_list))
+
+# ══════════════════════════════════════════════════════════════════
 # 数据加载与提取
 # ══════════════════════════════════════════════════════════════════
 def load_data(file_path: str):
@@ -227,9 +358,17 @@ def load_data(file_path: str):
             if not themes:
                 continue
 
+            obs = extract_obs_from_text(comment, code)
+            
             for t in themes:
                 fleet = str(row.get("训练机型", "")).strip()
-                rec = {"胜任力": code, "得分": score, "训练主题": t, "机型": fleet}
+                rec = {
+                    "胜任力": code,
+                    "得分": score,
+                    "训练主题": t,
+                    "机型": fleet,
+                    "OB标签": obs
+                }
                 all_rows.append(rec)
                 if pd.notna(score) and score < 3.0:
                     weak_rows.append(rec)
@@ -631,6 +770,159 @@ def plot_risk_heatmap(df: pd.DataFrame, title: str, subtitle: str,
     print(f"  [OK] 已生成: {out_path}")
     plt.close()
 
+
+# ══════════════════════════════════════════════════════════════════
+# 桑基图：三级流向分布 (胜任力 → 训练主题 → 核心风险)
+# ══════════════════════════════════════════════════════════════════
+def plot_sankey_3_stage(df: pd.DataFrame, title: str, subtitle: str, out_path: str):
+    df_risk = expand_to_risk(df)
+    if df_risk.empty:
+        print(f"  [跳过] {title} — 无数据")
+        return
+
+    # 两个阶段的流向
+    flow1 = df_risk.groupby(["胜任力", "训练主题"]).size().reset_index(name="count")
+    flow2 = df_risk.groupby(["训练主题", "核心风险"]).size().reset_index(name="count")
+
+    # 节点提取与排序
+    left_totals = flow1.groupby("胜任力")["count"].sum()
+    left_nodes = [c for c in COMP_ORDER if c in left_totals.index]
+
+    mid_totals = df_risk.groupby("训练主题").size().sort_values(ascending=False)
+    mid_nodes = list(mid_totals.head(15).index)  # 取TOP 15个主题
+
+    right_totals = flow2.groupby("核心风险")["count"].sum()
+    right_nodes = [r for r in RISK_ORDER if r in right_totals.index]
+
+    if not left_nodes or not mid_nodes or not right_nodes:
+        print(f"  [跳过] {title} — 流量为空")
+        return
+
+    # 仅保留包含在TOP 15的主题的流向
+    flow1 = flow1[flow1["训练主题"].isin(mid_nodes)]
+    flow2 = flow2[flow2["训练主题"].isin(mid_nodes)]
+
+    BG_MAIN = "#0A1020"
+    BG_BODY = "#0D1526"
+
+    max_nodes = max(len(left_nodes), len(mid_nodes), len(right_nodes))
+    fig_w = 34
+    fig_h = max(14, max_nodes * 0.8 + 2)
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), facecolor=BG_MAIN)
+    ax.set_facecolor(BG_BODY)
+    ax.set_xlim(-0.05, 1.05)
+    ax.set_ylim(-0.5, max_nodes + 0.5)
+    ax.axis("off")
+
+    x_l, x_m, x_r = 0.05, 0.5, 0.95
+    bar_w = 0.025
+
+    def get_positions(nodes):
+        n = len(nodes)
+        offset = (max_nodes - n) / 2
+        pos = {}
+        for i, node in enumerate(nodes):
+            pos[node] = max_nodes - 1 - offset - i
+        return pos
+
+    pos_l = get_positions(left_nodes)
+    pos_m = get_positions(mid_nodes)
+    pos_r = get_positions(right_nodes)
+
+    comp_colors = {
+        "FPA": "#3498DB", "FPM": "#2980B9", "COM": "#F1C40F", "LTW": "#E67E22",
+        "SAW": "#9B59B6", "WLM": "#2ECC71", "PSD": "#E74C3C"
+    }
+
+    theme_colors = {}
+    palette = ["#3498DB", "#2ECC71", "#E74C3C", "#F39C12", "#9B59B6",
+               "#1ABC9C", "#E67E22", "#2980B9", "#27AE60", "#C0392B",
+               "#D35400", "#8E44AD", "#16A085", "#F1C40F", "#7F8C8D"]
+    for i, t in enumerate(mid_nodes):
+        theme_colors[t] = palette[i % len(palette)]
+
+    risk_colors = {
+        "CFIT": "#E74C3C", "LOC": "#FF6B6B", "MAC": "#F39C12",
+        "ARC": "#E67E22", "RE": "#D35400", "RI": "#C0392B",
+        "GD": "#7F8C8D", "KSF": "#9B59B6", "IFD": "#3498DB",
+        "HSE": "#2ECC71", "综合胜任力短板": "#1ABC9C", "综合能力": "#1ABC9C"
+    }
+
+    def draw_node(x, y, color, label, ha, text_offset=0.015, val=0):
+        bar_h = 0.6
+        rect = mpatches.FancyBboxPatch(
+            (x - bar_w/2, y - bar_h/2), bar_w, bar_h,
+            boxstyle="round,pad=0.01",
+            facecolor=color, alpha=0.9, edgecolor="none")
+        ax.add_patch(rect)
+        if ha == "right":
+            ax.text(x - bar_w/2 - text_offset, y, f"{label} ({int(val)})",
+                    ha=ha, va="center", color="#D4E8FF", fontproperties=fp("bold", 16))
+        elif ha == "left":
+            ax.text(x + bar_w/2 + text_offset, y, f"{label} ({int(val)})",
+                    ha=ha, va="center", color="#D4E8FF", fontproperties=fp("bold", 16))
+        else: # center
+            ax.text(x, y + bar_h/2 + 0.05, f"{label} ({int(val)})",
+                    ha="center", va="bottom", color="#D4E8FF", fontproperties=fp("bold", 14))
+
+    for node, y in pos_l.items():
+        draw_node(x_l, y, comp_colors.get(node, "#888"), node, "right", val=left_totals.get(node, 0))
+    for node, y in pos_m.items():
+        draw_node(x_m, y, theme_colors.get(node, "#888"), node, "center", val=mid_totals.get(node, 0))
+    for node, y in pos_r.items():
+        cn = RISK_NAMES.get(node, node)
+        draw_node(x_r, y, risk_colors.get(node, "#888"), f"{node} {cn}", "left", val=right_totals.get(node, 0))
+
+    def draw_flow(flow_df, pos_start, pos_end, x_start, x_end, start_col, end_col, color_dict):
+        total_flow = flow_df["count"].sum()
+        max_left = flow_df.groupby(start_col)["count"].sum().max()
+        if max_left <= 0: max_left = 1
+        
+        for _, row in flow_df.iterrows():
+            st, en, cnt = row[start_col], row[end_col], row["count"]
+            if st not in pos_start or en not in pos_end:
+                continue
+            y_s = pos_start[st]
+            y_e = pos_end[en]
+            color = color_dict.get(st, "#666")
+            
+            alpha = max(0.1, min(0.6, cnt / (total_flow * 0.05)))
+            lw = max(0.8, min(20, cnt / max_left * 40))
+
+            mid_x = (x_start + x_end) / 2
+            import matplotlib.patches as mpath_patches
+            from matplotlib.path import Path
+            verts = [(x_start + bar_w/2, y_s),
+                     (mid_x, y_s), (mid_x, y_e),
+                     (x_end - bar_w/2, y_e)]
+            codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
+            path = Path(verts, codes)
+            patch = mpath_patches.PathPatch(
+                path, facecolor="none", edgecolor=color,
+                lw=lw, alpha=alpha, capstyle="round")
+            ax.add_patch(patch)
+
+            if cnt >= total_flow * 0.02:
+                tx = mid_x + (0.01 if x_start == x_l else -0.01)
+                ax.text(tx, (y_s + y_e)/2, str(cnt), ha="center", va="center",
+                        color="#D4E8FF", fontsize=11, fontproperties=fp("bold", 12), alpha=0.9)
+
+    draw_flow(flow1, pos_l, pos_m, x_l, x_m, "胜任力", "训练主题", comp_colors)
+    draw_flow(flow2, pos_m, pos_r, x_m, x_r, "训练主题", "核心风险", theme_colors)
+
+    total = int(df_risk.shape[0])
+    fig.text(0.5, 0.96, title, ha="center", va="top", fontproperties=fp("black", 38), color="#D4E8FF")
+    fig.text(0.5, 0.925, subtitle + f"   |   总流量：{total}", ha="center", va="top", fontproperties=fp("bold", 20), color="#6080A0")
+    
+    ax.text(x_l, max_nodes + 0.2, "胜任力 (Competency)", ha="center", va="bottom", color="#8AA8D8", fontproperties=fp("bold", 22))
+    ax.text(x_m, max_nodes + 0.2, "训练主题 (Training Theme)", ha="center", va="bottom", color="#8AA8D8", fontproperties=fp("bold", 22))
+    ax.text(x_r, max_nodes + 0.2, "核心风险 (Core Risk)", ha="center", va="bottom", color="#8AA8D8", fontproperties=fp("bold", 22))
+
+    plt.tight_layout(rect=[0, 0, 1, 0.90])
+    plt.savefig(out_path, dpi=160, bbox_inches="tight", facecolor=BG_MAIN, edgecolor="none")
+    print(f"  [OK] 已生成: {out_path}")
+    plt.close()
 
 # ══════════════════════════════════════════════════════════════════
 # 桑基图：训练主题 → 核心风险 流向分布
