@@ -29,15 +29,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller customtkinter pandas numpy openpyxl xlrd matplotlib seaborn pillow psutil
-
-      - name: Install tkinter (macOS)
-        if: runner.os == 'macOS'
-        run: brew install python-tk@3.11 || true
+          python -m pip install --upgrade pip --prefer-binary
+          pip install --prefer-binary pyinstaller customtkinter pandas numpy openpyxl xlrd matplotlib seaborn pillow psutil
 
       - name: Build with PyInstaller (Windows)
         if: runner.os == 'Windows'
@@ -47,7 +44,6 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           python -m PyInstaller AeroEBT.spec
-          # macOS produces a .app bundle, zip it for upload
           cd dist
           zip -r AeroEBT_v3.3_macos.zip AeroEBT_v3.3.app 2>/dev/null || zip -r AeroEBT_v3.3_macos.zip AeroEBT_v3.3
 
