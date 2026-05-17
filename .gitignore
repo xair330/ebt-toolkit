@@ -7,7 +7,7 @@ __pycache__/
 # PyInstaller 打包产物
 build/
 dist/
-*.spec
+# *.spec 不排除，CI 需要 AeroEBT.spec
 
 # 虚拟环境
 .venv/
@@ -20,7 +20,6 @@ env/
 *.csv
 
 # 配置文件（含本地路径，不上传）
-ebt_config.json
 cargo_config.json
 
 # 系统文件
