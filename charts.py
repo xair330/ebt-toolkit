@@ -14,16 +14,45 @@ import os
 from config_mgr import cfg
 
 def _setup_fonts():
-    """注册鸿蒙字体，返回 (font_medium, font_black, font_regular)"""
-    fonts = cfg["FONTS"]
-    FONT_MEDIUM, FONT_BLACK, FONT_REGULAR = fonts["FONT_MEDIUM"], fonts["FONT_BLACK"], fonts["FONT_REGULAR"]
+    """
+    注册鸿蒙字体并返回 (font_medium, font_black, font_regular)。
+    Fallback 优先级：TTF 文件 → 系统名称 HarmonyOS Sans SC → Microsoft YaHei UI → matplotlib 默认。
+    字体文件缺失时不报错，软件仍可正常运行（使用系统字体）。
+    """
+    fonts = cfg.get("FONTS", {})
+    FONT_MEDIUM  = fonts.get("FONT_MEDIUM",  "")
+    FONT_BLACK   = fonts.get("FONT_BLACK",   "")
+    FONT_REGULAR = fonts.get("FONT_REGULAR", "")
+
+    # 尝试注册字体文件（路径不存在则跳过）
+    loaded = False
     for p in [FONT_MEDIUM, FONT_BLACK, FONT_REGULAR]:
-        if os.path.exists(p):
+        if p and os.path.exists(p):
             fm.fontManager.addfont(p)
-    fmid = FontProperties(fname=FONT_MEDIUM)
-    fblk = FontProperties(fname=FONT_BLACK)
-    freg = FontProperties(fname=FONT_REGULAR)
-    plt.rcParams["font.family"] = [fmid.get_name()]
+            loaded = True
+
+    if loaded and os.path.exists(FONT_MEDIUM):
+        # 使用 TTF 文件构建 FontProperties
+        fmid = FontProperties(fname=FONT_MEDIUM)
+        fblk = FontProperties(fname=FONT_BLACK) if os.path.exists(FONT_BLACK) else fmid
+        freg = FontProperties(fname=FONT_REGULAR) if os.path.exists(FONT_REGULAR) else fmid
+        plt.rcParams["font.family"] = [fmid.get_name()]
+    else:
+        # Fallback：依次尝试系统字体名称
+        fallback_families = [
+            "HarmonyOS Sans SC", "Microsoft YaHei UI",
+            "Microsoft YaHei", "SimHei", "sans-serif",
+        ]
+        # 找到第一个系统中存在的字体
+        available = {f.name for f in fm.fontManager.ttflist}
+        chosen = next((f for f in fallback_families if f in available), "sans-serif")
+        if not loaded:
+            print(f"[字体] 字体文件未找到，降级使用系统字体: {chosen}")
+        plt.rcParams["font.family"] = [chosen]
+        fmid = FontProperties(family=chosen)
+        fblk = FontProperties(family=chosen, weight="bold")
+        freg = FontProperties(family=chosen)
+
     plt.rcParams["axes.unicode_minus"] = False
     return fmid, fblk, freg
 

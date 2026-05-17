@@ -89,7 +89,12 @@ def extract_weak_records(df: pd.DataFrame, threshold: float = 3.0) -> pd.DataFra
 def classify_issues(issues_df: pd.DataFrame, category_keys: dict) -> pd.DataFrame:
     """
     根据关键词字典为每条不足描述打上一个或多个问题大类标签，返回爆炸展开的长表。
+    当 issues_df 为空时，返回含 '问题大类' 列的空 DataFrame，确保调用方 value_counts() 不报 KeyError。
     """
+    if issues_df.empty:
+        cols = list(issues_df.columns) + ["问题大类"]
+        return pd.DataFrame(columns=cols)
+
     rows = []
     for _, row in issues_df.iterrows():
         matched = [cat for cat, kws in category_keys.items()
@@ -98,7 +103,12 @@ def classify_issues(issues_df: pd.DataFrame, category_keys: dict) -> pd.DataFram
             matched = ["其他"]
         for cat in matched:
             rows.append({**row.to_dict(), "问题大类": cat})
-    return pd.DataFrame(rows)
+
+    result = pd.DataFrame(rows)
+    # 确保列存在（防御性保护）
+    if "问题大类" not in result.columns:
+        result["问题大类"] = pd.Series(dtype=str)
+    return result
 
 
 def assess_comment_quality(text: str, cause_keys: list, sol_keys: list,

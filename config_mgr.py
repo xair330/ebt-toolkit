@@ -54,9 +54,9 @@ DEFAULT_CONFIG = {
         }
     },
     "FONTS": {
-        "FONT_MEDIUM": "C:\\Users\\xair3\\AppData\\Local\\Microsoft\\Windows\\Fonts\\HarmonyOS_Sans_SC_Medium.ttf",
-        "FONT_BLACK": "C:\\Users\\xair3\\AppData\\Local\\Microsoft\\Windows\\Fonts\\HarmonyOS_Sans_SC_Black.ttf",
-        "FONT_REGULAR": "C:\\Users\\xair3\\AppData\\Local\\Microsoft\\Windows\\Fonts\\HarmonyOS_Sans_SC_Regular.ttf"
+        "FONT_MEDIUM":  "fonts/HarmonyOS_Sans_SC_Medium.ttf",
+        "FONT_BLACK":   "fonts/HarmonyOS_Sans_SC_Black.ttf",
+        "FONT_REGULAR": "fonts/HarmonyOS_Sans_SC_Regular.ttf"
     }
 }
 
@@ -81,4 +81,15 @@ def load_or_create_config():
             print("将使用系统默认配置！")
             cfg.update(DEFAULT_CONFIG)
 
+def _resolve_font_paths():
+    """将 FONTS 中的相对路径转换为相对于程序目录的绝对路径。"""
+    base = get_exe_dir()
+    fonts = cfg.get("FONTS", {})
+    for key in list(fonts.keys()):
+        p = fonts[key]
+        if p and not os.path.isabs(p):
+            fonts[key] = os.path.normpath(os.path.join(base, p))
+    cfg["FONTS"] = fonts
+
 load_or_create_config()
+_resolve_font_paths()

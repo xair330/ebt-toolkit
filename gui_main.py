@@ -26,6 +26,14 @@ from ob_distribution_charts import plot_ob_bar_chart, plot_ob_theme_heatmap
 from fleet_report_generator import generate_fleet_report
 from generate_sankey3 import plot_sankey_3_stage
 
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from ob_analysis_engine import OBAnalysisEngine
+except ImportError:
+    OBAnalysisEngine = None
+
+
 # ══════════════════════════════════════════════════════════════════
 # 全局主题色
 # ══════════════════════════════════════════════════════════════════
@@ -59,6 +67,8 @@ DEFAULT_UI = {
     "filter_jixing":        [],        # 机型（空=全选）
     "filter_yunyingjidi":   [],        # 运行基地（空=全选）
     "filter_xunlian_leixing": [],      # 训练类型（空=全选）
+    "filter_is_cadre":      [],        # 是否干部
+    "filter_age_group":     [],        # 年龄段
     # 输出图表选择
     "output_charts": {
         "图1_问题大类": True,
@@ -77,6 +87,10 @@ DEFAULT_UI = {
         "图I_低分风险矩阵": True,
         "图J_A330风险矩阵": True,
         "图K_A350风险矩阵": True,
+        "引擎_人员低分明细": True,
+        "引擎_按人胜任力汇总": True,
+        "引擎_主题与核心风险": True,
+        "引擎_群体画像": True,
     },
 }
 
@@ -404,27 +418,71 @@ class SettingsDialog(ctk.CTkToplevel):
                 row=0, column=i, sticky="w", padx=10, pady=3)
 
         # ── 技术等级 ──────────────────────────
-        section("技术等级", "勾选要纳入分析的等级，留空=全部")
-        DENGJI_OPTS = [
-            "330:A1类副驾驶", "330:A2类副驾驶", "330:B类副驾驶", "330:C类副驾驶",
-            "330:D类副驾驶", "330:C类机长", "330:D类机长", "330:Z类机长",
-            "330:资深副驾驶", "330:飞行教员A", "330:飞行教员B", "330:飞行教员C",
-            "350:A1类副驾驶", "350:A2类副驾驶", "350:B类副驾驶", "350:C类副驾驶",
-            "350:D类副驾驶", "350:B类机长", "350:C类机长", "350:D类机长",
-            "350:飞行教员A", "350:飞行教员B",
+        section("技术等级", "快捷选项自动跨机型匹配，精细选项仅匹配对应机型")
+        DENGJI_GROUPS = [
+            ("── 快捷角色（跨机型）──", [
+                "飞行教员A", "飞行教员B", "飞行教员C",
+                "C类机长", "D类机长", "Z类机长",
+                "C类副驾驶", "B类副驾驶", "A2类副驾驶",
+            ]),
+            ("── A330 精细等级 ──", [
+                "330:A1类副驾驶", "330:A2类副驾驶", "330:B类副驾驶", "330:C类副驾驶",
+                "330:D类副驾驶", "330:资深副驾驶", "330:C类机长", "330:D类机长",
+                "330:Z类机长", "330:飞行教员A", "330:飞行教员B", "330:飞行教员C",
+            ]),
+            ("── A350 精细等级 ──", [
+                "350:A1类副驾驶", "350:A2类副驾驶", "350:B类副驾驶", "350:C类副驾驶",
+                "350:D类副驾驶", "350:C类机长", "350:D类机长",
+                "350:飞行教员A", "350:飞行教员B",
+            ]),
         ]
         self._dengji_vars = {}
-        dg_frame = ctk.CTkFrame(sf, fg_color="transparent")
-        dg_frame.pack(fill="x", padx=4)
         selected_dg = self.ui.get("filter_jishu_dengji", [])
-        for i, opt in enumerate(DENGJI_OPTS):
-            v = ctk.BooleanVar(value=(opt in selected_dg))
-            self._dengji_vars[opt] = v
-            ctk.CTkCheckBox(dg_frame, text=opt, variable=v,
+        for grp_label, opts in DENGJI_GROUPS:
+            ctk.CTkLabel(sf, text=grp_label,
+                         font=ctk.CTkFont(size=11),
+                         text_color=C_TEXT_DIM).pack(anchor="w", padx=8, pady=(8, 0))
+            dg_frame = ctk.CTkFrame(sf, fg_color="transparent")
+            dg_frame.pack(fill="x", padx=4)
+            for i, opt in enumerate(opts):
+                v = ctk.BooleanVar(value=(opt in selected_dg))
+                self._dengji_vars[opt] = v
+                ctk.CTkCheckBox(dg_frame, text=opt, variable=v,
+                                text_color=C_TEXT, checkmark_color="white",
+                                fg_color=C_ACCENT, hover_color=C_PANEL2,
+                                border_color=C_BORDER).grid(
+                    row=i//3, column=i%3, sticky="w", padx=8, pady=2)
+
+        # ── 干部身份 ──────────────────────────
+        section("干部身份", "")
+        CADRE_OPTS = ["是", "否"]
+        self._cadre_vars = {}
+        row4 = ctk.CTkFrame(sf, fg_color="transparent")
+        row4.pack(fill="x", padx=4)
+        selected_cd = self.ui.get("filter_is_cadre", [])
+        for i, opt in enumerate(CADRE_OPTS):
+            v = ctk.BooleanVar(value=(opt in selected_cd))
+            self._cadre_vars[opt] = v
+            ctk.CTkCheckBox(row4, text=opt, variable=v,
                             text_color=C_TEXT, checkmark_color="white",
                             fg_color=C_ACCENT, hover_color=C_PANEL2,
-                            border_color=C_BORDER).grid(
-                row=i//2, column=i%2, sticky="w", padx=10, pady=2)
+                            border_color=C_BORDER).grid(row=0, column=i, sticky="w", padx=10, pady=3)
+
+        # ── 年龄段 ──────────────────────────
+        section("年龄段", "")
+        AGE_OPTS = ["30岁以下", "30-39岁", "40-49岁", "50岁及以上"]
+        self._age_vars = {}
+        row5 = ctk.CTkFrame(sf, fg_color="transparent")
+        row5.pack(fill="x", padx=4)
+        selected_ag = self.ui.get("filter_age_group", [])
+        for i, opt in enumerate(AGE_OPTS):
+            v = ctk.BooleanVar(value=(opt in selected_ag))
+            self._age_vars[opt] = v
+            ctk.CTkCheckBox(row5, text=opt, variable=v,
+                            text_color=C_TEXT, checkmark_color="white",
+                            fg_color=C_ACCENT, hover_color=C_PANEL2,
+                            border_color=C_BORDER).grid(row=0, column=i, sticky="w", padx=10, pady=3)
+
 
         # ── 全选/清空 ──────────────────────────
         ctk.CTkFrame(sf, height=1, fg_color=C_BORDER).pack(fill="x", padx=4, pady=(12, 6))
@@ -444,12 +502,16 @@ class SettingsDialog(ctk.CTkToplevel):
         for v in self._jidi_vars.values(): v.set(True)
         for v in self._leixing_vars.values(): v.set(True)
         for v in self._dengji_vars.values(): v.set(True)
+        for v in self._cadre_vars.values(): v.set(True)
+        for v in self._age_vars.values(): v.set(True)
 
     def _clear_all_filters(self):
         for v in self._jixing_vars.values(): v.set(False)
         for v in self._jidi_vars.values(): v.set(False)
         for v in self._leixing_vars.values(): v.set(False)
         for v in self._dengji_vars.values(): v.set(False)
+        for v in self._cadre_vars.values(): v.set(False)
+        for v in self._age_vars.values(): v.set(False)
 
     # ── 输出图表 Tab ─────────────────────────────────────────
     def _build_tab_charts(self, tab):
@@ -479,6 +541,12 @@ class SettingsDialog(ctk.CTkToplevel):
                 ("图I_低分风险矩阵", "图I · 胜任力×核心风险热力矩阵  低分"),
                 ("图J_A330风险矩阵", "图J · 胜任力×核心风险热力矩阵  A330"),
                 ("图K_A350风险矩阵", "图K · 胜任力×核心风险热力矩阵  A350"),
+            ]),
+            ("阶段四  综合分析引擎报表 (Excel)", [
+                ("引擎_人员低分明细", "表1 · 人员低分明细"),
+                ("引擎_按人胜任力汇总", "表2 · 按人胜任力及红线汇总"),
+                ("引擎_主题与核心风险", "表3 · 训练主题、核心风险与OB统计"),
+                ("引擎_群体画像", "表4 · 多维度群体特征画像"),
             ]),
         ]
 
@@ -533,6 +601,8 @@ class SettingsDialog(ctk.CTkToplevel):
         self.ui["filter_jixing"]          = [k for k, v in self._jixing_vars.items() if v.get()]
         self.ui["filter_yunyingjidi"]     = [k for k, v in self._jidi_vars.items() if v.get()]
         self.ui["filter_xunlian_leixing"] = [k for k, v in self._leixing_vars.items() if v.get()]
+        self.ui["filter_is_cadre"]        = [k for k, v in self._cadre_vars.items() if v.get()]
+        self.ui["filter_age_group"]       = [k for k, v in self._age_vars.items() if v.get()]
 
         # 输出图表
         self.ui["output_charts"] = {k: v.get() for k, v in self._chart_vars.items()}
@@ -680,6 +750,18 @@ class App(ctk.CTk):
                       font=ctk.CTkFont(size=12),
                       command=self._browse_file).pack(fill="x", padx=12, pady=(0, 8))
 
+        # ── 人员信息台账 ──────────────────────────────────────
+        sec_label("▸ PERSONNEL DATA")
+        self.personnel_path_var = ctk.StringVar(value=cfg.get("PERSONNEL_FILE", ""))
+        ctk.CTkLabel(sb_scroll, textvariable=self.personnel_path_var,
+                     text_color="#6880A8", wraplength=220, justify="left",
+                     font=ctk.CTkFont(size=10)).pack(anchor="w", padx=14, pady=(0, 4))
+        ctk.CTkButton(sb_scroll, text="LOAD PERSONNEL INFO", height=32,
+                      fg_color="transparent", border_width=1, border_color=C_AMBER,
+                      text_color=C_AMBER, hover_color="#2A1A08",
+                      font=ctk.CTkFont(size=12),
+                      command=self._browse_personnel).pack(fill="x", padx=12, pady=(0, 8))
+
         # ── 分析期次 ──────────────────────────────────────────
         sec_label("▸ PERIOD")
         self.entry_period = ctk.CTkEntry(sb_scroll, height=32,
@@ -726,14 +808,16 @@ class App(ctk.CTk):
         jd  = self.ui.get("filter_yunyingjidi", [])
         lt  = self.ui.get("filter_xunlian_leixing", [])
         dg  = self.ui.get("filter_jishu_dengji", [])
+        cd  = self.ui.get("filter_is_cadre", [])
+        ag  = self.ui.get("filter_age_group", [])
         enabled = self.ui.get("output_charts", {})
         n_charts = sum(1 for v in enabled.values() if v)
         lines = [
             f"机型: {', '.join(jx) if jx else '全部'}",
             f"基地: {', '.join(jd) if jd else '全部'}",
-            f"训练: {', '.join(lt) if lt else '全部'}",
             f"等级: {'已选 '+str(len(dg))+'项' if dg else '全部'}",
-            f"图表: 已选 {n_charts}/16 张",
+            f"干部: {', '.join(cd) if cd else '全部'} | 年龄: {', '.join(ag) if ag else '全部'}",
+            f"图表: 已选 {n_charts} 项",
         ]
         return "\n".join(lines)
 
@@ -764,6 +848,14 @@ class App(ctk.CTk):
         if f:
             self.file_path_var.set(f)
             cfg["DATA_FILE"] = f
+
+    def _browse_personnel(self):
+        f = filedialog.askopenfilename(
+            title="选择人员信息台账Excel",
+            filetypes=[("Excel", "*.xls *.xlsx"), ("All", "*.*")])
+        if f:
+            self.personnel_path_var.set(f)
+            cfg["PERSONNEL_FILE"] = f
 
     def _browse_out(self):
         d = filedialog.askdirectory(title="选择产出目录")
@@ -813,7 +905,11 @@ class App(ctk.CTk):
 
     # ── 数据筛选 ─────────────────────────────────────────────
     def _apply_filters(self, df: pd.DataFrame) -> pd.DataFrame:
-        """按 UI 设置对原始 DataFrame 进行筛选"""
+        """按 UI 设置对原始 DataFrame 进行筛选。
+        技术等级支持两种模式：
+          - 含冒号（如 '330:飞行教员A'）→ 精确包含匹配
+          - 不含冒号（如 '飞行教员A'）    → 跨机型模糊匹配（str.contains）
+        """
         jx = self.ui.get("filter_jixing", [])
         jd = self.ui.get("filter_yunyingjidi", [])
         lt = self.ui.get("filter_xunlian_leixing", [])
@@ -826,7 +922,20 @@ class App(ctk.CTk):
         if lt:
             df = df[df["训练类型"].astype(str).isin(lt)]
         if dg:
-            df = df[df["技术等级"].astype(str).isin(dg)]
+            exact   = [x for x in dg if ":" in x]   # 精确选项，如 "330:飞行教员A"
+            fuzzy   = [x for x in dg if ":" not in x]  # 跨机型关键词，如 "飞行教员A"
+            col = df["技术等级"].astype(str)
+            masks = []
+            if exact:
+                masks.append(col.isin(exact))
+            if fuzzy:
+                pattern = "|".join(re.escape(k) for k in fuzzy)
+                masks.append(col.str.contains(pattern, na=False))
+            if masks:
+                combined = masks[0]
+                for m in masks[1:]:
+                    combined = combined | m
+                df = df[combined]
         return df
 
     def _chart_on(self, key: str) -> bool:
@@ -840,7 +949,7 @@ class App(ctk.CTk):
         os.makedirs(OUTPUT_DIR, exist_ok=True)
 
         print("══════════════════════════════════════════════════")
-        print("   AeroEBT 大数据深度分析引擎 v3.0")
+        print("   AeroEBT 大数据深度分析引擎 v3.3")
         print("   ┄ 问题大类 + 训练主题 + 核心风险 全维度 ┄")
         print("══════════════════════════════════════════════════")
         print(f"[*] 数据源:  {DATA_FILE}")
@@ -854,7 +963,7 @@ class App(ctk.CTk):
         dg = self.ui.get("filter_jishu_dengji", [])
         if any([jx, jd, lt, dg]):
             print(f"[*] 筛选:    机型={jx or '全'}  基地={jd or '全'}"
-                  f"  类型={lt or '全'}  等级={len(dg)+'项' if dg else '全'}")
+                  f"  类型={lt or '全'}  等级={str(len(dg))+'项' if dg else '全'}")
         else:
             print("[*] 筛选:    无（全量数据）")
         print()
@@ -869,10 +978,14 @@ class App(ctk.CTk):
         df = self._apply_filters(df_raw)
         issues_df = extract_weak_records(df, threshold=3.0)
         cat_df = classify_issues(issues_df, cfg["CATEGORY_KEYS"])
+        # cat_df 可能为空（筛选后无低分项），已在 classify_issues 中确保 '问题大类' 列存在
         cat_counts = cat_df["问题大类"].value_counts()
         comp_codes = [c for _, c in cfg["COMPETENCIES"]]
         print(f"      原始 {len(df_raw)} 条 → 筛选后 {len(df)} 条，"
               f"低分项 {len(issues_df)} 条\n")
+
+        if cat_counts.empty:
+            print("      [提示] 当前筛选条件下无低分项，问题大类分析阶段跳过。")
 
 
         # ── 阶段二：训练主题 ─────────────────────────────────
@@ -894,14 +1007,11 @@ class App(ctk.CTk):
             print("\n[7/12] 加载训练主题映射数据...")
             tma_all_raw, tma_weak_raw = tma_load_data(DATA_FILE)
 
-            # 对训练主题数据也应用筛选（机型字段）
-            jx_filter = [k for k in jx if k.replace(";", "").strip()]  # 取机型过滤
-            tma_a330 = tma_all_raw[tma_all_raw["机型"].astype(str).str.contains("330", na=False)]
-            tma_a350 = tma_all_raw[tma_all_raw["机型"].astype(str).str.contains("350", na=False)]
-
-            # 基地/类型/等级筛选暂按全量（tma_load_data 只含训练主题命中记录）
-            tma_all  = tma_all_raw
-            tma_weak = tma_weak_raw
+            # 对训练主题数据同步应用等级/基地/类型筛选
+            tma_all  = self._apply_filters(tma_all_raw)
+            tma_weak = self._apply_filters(tma_weak_raw)
+            tma_a330 = tma_all[tma_all["机型"].astype(str).str.contains("330", na=False)]
+            tma_a350 = tma_all[tma_all["机型"].astype(str).str.contains("350", na=False)]
             print(f"      全员:{len(tma_all)}  低分:{len(tma_weak)}  "
                   f"A330:{len(tma_a330)}  A350:{len(tma_a350)}")
         else:
@@ -931,7 +1041,55 @@ class App(ctk.CTk):
 
         print("\n[++] 全部报告自动化拼装结束！")
 
-        print("\n[13/13] 全部流程完毕！")
+        print("\n" + "━" * 50)
+        print("  阶段四  数据引擎综合报告 (Excel)")
+        print("━" * 50)
+        
+        eng_dims = []
+        if self._chart_on("引擎_人员低分明细"): eng_dims.append("人员低分明细")
+        if self._chart_on("引擎_按人胜任力汇总"): eng_dims.append("按人胜任力汇总")
+        if self._chart_on("引擎_主题与核心风险"): eng_dims.append("训练主题与核心风险")
+        if self._chart_on("引擎_群体画像"): eng_dims.append("群体画像")
+
+        if eng_dims:
+            print("\n[++] 启动全维度数据引擎...")
+            if OBAnalysisEngine is None:
+                print("      [错误] 未找到 ob_analysis_engine.py 模块。")
+            else:
+                personnel_file = self.personnel_path_var.get()
+                if not personnel_file or not os.path.exists(personnel_file):
+                    personnel_file = None
+                    print("      [提示] 未选择人员台账，将缺少干部/年龄标签。")
+                
+                print("      [1] 正在加载并关联人员台账底层数据...")
+                engine = OBAnalysisEngine([DATA_FILE], personnel_file)
+                
+                print("      [2] 正在应用全局筛选条件...")
+                engine_filters = {
+                    "机型": jx,
+                    "运行基地": jd,
+                    "训练类型": lt,
+                    "技术等级": dg,
+                    "是否干部": self.ui.get("filter_is_cadre", []),
+                    "年龄段": self.ui.get("filter_age_group", [])
+                }
+                engine.filter_data(engine_filters)
+                
+                print(f"      [3] 正在生成您选取的维度: {', '.join(eng_dims)}")
+                res = engine.run_analysis(eng_dims)
+                
+                if res:
+                    out_excel = os.path.join(OUTPUT_DIR, f"综合分析报告_{PERIOD}.xlsx")
+                    with pd.ExcelWriter(out_excel, engine="openpyxl") as writer:
+                        for k, v in res.items():
+                            v.to_excel(writer, sheet_name=k[:31], index=False)
+                    print(f"      [OK] 综合报告生成完毕: {out_excel}")
+                else:
+                    print("      [提示] 引擎运行完成，但筛选条件下无记录产出。")
+        else:
+            print("\n[++] 综合数据引擎报告均已跳过（未在面板中勾选）。")
+
+        print("\n[✔] 全部流程完毕！")
         print(f"\n[OK] 产出目录:\n{OUTPUT_DIR}")
 
 
