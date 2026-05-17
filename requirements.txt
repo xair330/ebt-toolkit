@@ -1,0 +1,10 @@
+pyinstaller
+customtkinter
+pandas
+numpy
+openpyxl
+xlrd
+matplotlib
+seaborn
+pillow
+psutil
